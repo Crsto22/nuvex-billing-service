@@ -35,6 +35,21 @@ En Windows puede copiar `.env.local.example` como `.env.local`, configurar la ba
 .\scripts\start-local.ps1
 ```
 
+## Docker de producción
+
+El Compose despliega PostgreSQL, ejecuta las migraciones y después inicia la API y el worker. Ambos se conectan automáticamente a PostgreSQL mediante el hostname interno `postgres`.
+
+Guía completa: [`docs/docker-deployment.md`](docs/docker-deployment.md).
+
+```bash
+cp .env.production.example .env.production
+# Complete todos los valores REPLACE_WITH_...
+docker compose --env-file .env.production up -d --build
+docker compose ps
+```
+
+La API queda disponible únicamente en `127.0.0.1:3100` para conectarla de forma segura a Nginx, Caddy o Traefik y publicar `https://billing-api.nuvex.pe`. PostgreSQL no expone ningún puerto al exterior.
+
 La API expone `GET /v1/health`. El worker consume la cola PostgreSQL, genera XML/ZIP firmados, usa `sendBill` para facturas y `sendSummary`/`getStatus` para boletas mediante Resumen Diario en SUNAT BETA, almacena el CDR y aplica reintentos durables.
 
 ## Documentos de diseño

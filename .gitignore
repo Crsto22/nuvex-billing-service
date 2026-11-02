@@ -7,6 +7,7 @@ output/
 .env.*
 !.env.example
 !.env.local.example
+!.env.production.example
 *.p12
 *.pfx
 *.pem
