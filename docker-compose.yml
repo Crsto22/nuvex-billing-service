@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: nuvex_billing
+      POSTGRES_USER: nuvex_billing
+      POSTGRES_PASSWORD: nuvex_billing
+    ports:
+      - "5432:5432"
+    volumes:
+      - nuvex_billing_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nuvex_billing -d nuvex_billing"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  nuvex_billing_postgres:

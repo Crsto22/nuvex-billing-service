@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+tmp/
+output/
+.env
+.env.*
+!.env.example
+!.env.local.example
+*.p12
+*.pfx
+*.pem
+*.key
+*.log
+.DS_Store
+Thumbs.db

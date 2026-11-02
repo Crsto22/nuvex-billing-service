@@ -1,0 +1,2590 @@
+openapi: 3.1.0
+info:
+  title: Nuvex Billing API
+  version: 1.0.0-draft
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+  description: |
+    Contrato inicial para emitir facturas y boletas electrónicas ante SUNAT.
+    Todos los importes y cantidades decimales se representan como strings para
+    evitar pérdida de precisión. La numeración fiscal es asignada por el servicio.
+servers:
+  - url: https://billing-api.nuvex.pe/v1
+    description: Producción
+  - url: https://billing-api-beta.nuvex.pe/v1
+    description: Beta
+security:
+  - bearerAuth: []
+tags:
+  - name: System
+    description: Estado operativo del servicio.
+  - name: Calculations
+    description: Cálculos tributarios sin emisión.
+  - name: Documents
+    description: Registro, consulta, reintento y archivos de comprobantes.
+  - name: DespatchGuides
+    description: Registro, consulta y anulación de GRE Remitente.
+  - name: Webhooks
+    description: Destinos para notificaciones asíncronas firmadas.
+  - name: Identity
+    description: Contexto de la aplicación autenticada.
+  - name: Administration
+    description: Empresas, aplicaciones y credenciales de plataforma.
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      security: []
+      operationId: getHealth
+      summary: Verifica que la API esté disponible
+      responses:
+        '200':
+          description: Servicio disponible
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, timestamp]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+        '429':
+          description: Límite de solicitudes excedido
+
+  /me:
+    get:
+      tags: [Identity]
+      operationId: getCurrentApplication
+      summary: Devuelve el contexto de la API key autenticada
+      responses:
+        '200':
+          description: Contexto autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationPrincipal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/tenants:
+    get:
+      tags: [Administration]
+      operationId: listTenants
+      summary: Lista empresas contribuyentes
+      responses:
+        '200':
+          description: Empresas registradas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Administration]
+      operationId: createTenant
+      summary: Registra una empresa contribuyente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenant'
+      responses:
+        '201':
+          description: Empresa creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: RUC duplicado
+
+  /admin/tenants/{tenantId}:
+    get:
+      tags: [Administration]
+      operationId: getTenant
+      summary: Obtiene una empresa y sus aplicaciones
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Empresa encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tenants/{tenantId}/status:
+    patch:
+      tags: [Administration]
+      operationId: updateTenantStatus
+      summary: Activa o suspende una empresa
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [ACTIVE, SUSPENDED]
+      responses:
+        '200':
+          description: Empresa actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tenants/{tenantId}/applications:
+    get:
+      tags: [Administration]
+      operationId: listApplications
+      summary: Lista aplicaciones de una empresa
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Aplicaciones registradas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Administration]
+      operationId: createApplication
+      summary: Registra una aplicación consumidora
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApplication'
+      responses:
+        '201':
+          description: Aplicación creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Código duplicado dentro de la empresa
+
+  /admin/applications/{applicationId}/status:
+    patch:
+      tags: [Administration]
+      operationId: updateApplicationStatus
+      summary: Activa o deshabilita una aplicación
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [ACTIVE, DISABLED]
+      responses:
+        '200':
+          description: Aplicación actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/applications/{applicationId}/api-keys:
+    get:
+      tags: [Administration]
+      operationId: listApiKeys
+      summary: Lista metadatos de API keys sin revelar secretos
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          description: API keys registradas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiKeyMetadata'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Administration]
+      operationId: createApiKey
+      summary: Crea una API key y revela su valor una sola vez
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKey'
+      responses:
+        '201':
+          description: API key creada
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiKeyMetadata'
+                  - type: object
+                    required: [apiKey]
+                    properties:
+                      apiKey:
+                        type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/api-keys/{apiKeyId}:
+    delete:
+      tags: [Administration]
+      operationId: revokeApiKey
+      summary: Revoca inmediatamente una API key
+      parameters:
+        - name: apiKeyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: API key revocada
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tenants/{tenantId}/sunat-credentials:
+    get:
+      tags: [Administration]
+      operationId: listSunatCredentials
+      summary: Lista la configuraciÃ³n SUNAT de ambos ambientes sin revelar secretos
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Configuraciones BETA y PRODUCTION
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SunatCredential'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tenants/{tenantId}/sunat-credentials/{environment}:
+    get:
+      tags: [Administration]
+      operationId: getSunatCredential
+      summary: Obtiene metadatos de una configuraciÃ³n SUNAT
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/Environment'
+      responses:
+        '200':
+          description: ConfiguraciÃ³n sin valores secretos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SunatCredential'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Administration]
+      operationId: updateSunatCredential
+      summary: Configura credenciales SOL/OAuth o cambia el estado activo
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/Environment'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSunatCredential'
+      responses:
+        '200':
+          description: ConfiguraciÃ³n actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SunatCredential'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/tenants/{tenantId}/sunat-credentials/{environment}/certificate:
+    put:
+      tags: [Administration]
+      operationId: uploadSunatCertificate
+      summary: Valida y almacena un certificado PFX/P12 privado
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/Environment'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [certificate, password]
+              properties:
+                certificate:
+                  type: string
+                  format: binary
+                password:
+                  type: string
+                  format: password
+                  maxLength: 200
+      responses:
+        '200':
+          description: Certificado validado y almacenado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SunatCredential'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Administration]
+      operationId: deleteSunatCertificate
+      summary: Elimina el certificado y desactiva la configuraciÃ³n
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/Environment'
+      responses:
+        '200':
+          description: Certificado eliminado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SunatCredential'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tenants/{tenantId}/establishments:
+    get:
+      tags: [Administration]
+      operationId: listEstablishments
+      summary: Lista establecimientos de una empresa
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Establecimientos registrados
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Establishment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Administration]
+      operationId: createEstablishment
+      summary: Registra un establecimiento emisor
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEstablishment'
+      responses:
+        '201':
+          description: Establecimiento creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Establishment'
+        '409':
+          description: CÃ³digo de establecimiento duplicado
+
+  /admin/tenants/{tenantId}/fiscal-series:
+    get:
+      tags: [Administration]
+      operationId: listFiscalSeries
+      summary: Lista series fiscales y su correlativo actual
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Series registradas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FiscalSeries'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Administration]
+      operationId: createFiscalSeries
+      summary: Asigna una serie fiscal a una aplicaciÃ³n
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFiscalSeries'
+      responses:
+        '201':
+          description: Serie creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalSeries'
+        '409':
+          description: Serie duplicada para empresa, ambiente y tipo
+
+  /calculations/policy:
+    get:
+      tags: [Calculations]
+      operationId: getCalculationPolicy
+      summary: Devuelve la polÃ­tica tributaria activa
+      responses:
+        '200':
+          description: VersiÃ³n, tasa, escalas y afectaciones soportadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationPolicy'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /calculations:
+    post:
+      tags: [Calculations]
+      operationId: calculateDocument
+      summary: Calcula y valida importes tributarios sin emitir un comprobante
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculationRequest'
+      responses:
+        '200':
+          description: Cálculo tributario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /documents:
+    post:
+      tags: [Documents]
+      operationId: createDocument
+      summary: Registra un comprobante para emisión asíncrona
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDocumentRequest'
+      responses:
+        '202':
+          description: Documento recibido y encolado
+          headers:
+            Location:
+              description: URL del documento creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: La clave de idempotencia ya fue usada con otro payload
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+    get:
+      tags: [Documents]
+      operationId: listDocuments
+      summary: Lista documentos de la aplicación autenticada
+      parameters:
+        - name: externalId
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/DocumentStatus'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Página de documentos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Document'
+                  nextCursor:
+                    type: [string, 'null']
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /documents/{documentId}:
+    get:
+      tags: [Documents]
+      operationId: getDocument
+      summary: Obtiene el estado y resultado de un documento
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Documento encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /credit-notes:
+    post:
+      tags: [Documents]
+      operationId: createCreditNote
+      summary: Valida y reserva una nota de crédito
+      description: La nota se calcula y queda en QUEUED para generar y enviar su XML.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaxNoteRequest'
+      responses:
+        '201':
+          description: Nota validada, numerada y con saldo reservado
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxNoteCreation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Comprobante no aceptado, saldo insuficiente o conflicto de idempotencia
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /debit-notes:
+    post:
+      tags: [Documents]
+      operationId: createDebitNote
+      summary: Valida y reserva una nota de débito
+      description: La nota se calcula y queda en QUEUED para generar y enviar su XML.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaxNoteRequest'
+      responses:
+        '201':
+          description: Nota validada y numerada
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxNoteCreation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Comprobante no aceptado o conflicto de idempotencia
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /documents/{documentId}/retry:
+    post:
+      tags: [Documents]
+      operationId: retryDocument
+      summary: Reintenta un documento con error recuperable
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Reintento programado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '409':
+          description: El estado actual no permite reintentar
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /documents/{documentId}/artifacts:
+    get:
+      tags: [Documents]
+      operationId: listDocumentArtifacts
+      summary: Lista los archivos tributarios disponibles
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Catálogo de archivos sin exponer sus claves privadas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ArtifactMetadata'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /documents/{documentId}/artifacts/{artifactType}:
+    get:
+      tags: [Documents]
+      operationId: getDocumentArtifact
+      summary: Genera una URL temporal para descargar un archivo
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - name: artifactType
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ArtifactType'
+      responses:
+        '200':
+          description: Enlace temporal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactDownload'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /webhook-endpoints:
+    get:
+      tags: [Webhooks]
+      operationId: listWebhookEndpoints
+      summary: Lista los destinos de la aplicación autenticada
+      responses:
+        '200':
+          description: Destinos registrados, sin secretos de firma
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WebhookEndpoint'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Webhooks]
+      operationId: createWebhookEndpoint
+      summary: Registra un destino de webhooks para la aplicación
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookEndpoint'
+      responses:
+        '201':
+          description: Endpoint creado. El secreto solo se devuelve esta vez.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointWithSecret'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /webhook-endpoints/{endpointId}:
+    parameters:
+      - name: endpointId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      tags: [Webhooks]
+      operationId: updateWebhookEndpoint
+      summary: Actualiza URL, eventos o estado del destino
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWebhookEndpoint'
+      responses:
+        '200':
+          description: Destino actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpoint'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Webhooks]
+      operationId: deactivateWebhookEndpoint
+      summary: Desactiva el destino y sus entregas pendientes
+      responses:
+        '200':
+          description: Destino desactivado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpoint'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /webhook-endpoints/{endpointId}/rotate-secret:
+    post:
+      tags: [Webhooks]
+      operationId: rotateWebhookSigningSecret
+      summary: Rota el secreto de firma; el nuevo valor se muestra una sola vez
+      parameters:
+        - name: endpointId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Secreto rotado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointWithSecret'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /despatch-guides:
+    post:
+      tags: [DespatchGuides]
+      operationId: createDespatchGuide
+      summary: Registra y numera una GRE Remitente
+      description: La guía queda REGISTERED; el envío SUNAT se implementa en una etapa posterior.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDespatchGuide'
+      responses:
+        '201':
+          description: Guía registrada
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DespatchGuide'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Conflicto de externalId o idempotencia
+    get:
+      tags: [DespatchGuides]
+      operationId: listDespatchGuides
+      summary: Lista las guías de la aplicación y ambiente autenticados
+      parameters:
+        - name: externalId
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/DespatchGuideStatus'
+        - name: cursor
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Página de guías
+
+  /despatch-guides/{guideId}:
+    get:
+      tags: [DespatchGuides]
+      operationId: getDespatchGuide
+      summary: Consulta una GRE Remitente
+      parameters:
+        - name: guideId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Guía encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DespatchGuide'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /despatch-guides/{guideId}/cancel:
+    post:
+      tags: [DespatchGuides]
+      operationId: cancelDespatchGuide
+      summary: Anula localmente o solicita la baja de una GRE
+      description: Una guía no enviada se cancela localmente; una guía enviada queda CANCELLATION_REQUESTED.
+      parameters:
+        - name: guideId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 3, maxLength: 250 }
+      responses:
+        '200':
+          description: Estado de cancelación actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DespatchGuide'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: NUVEX_API_KEY
+      description: API key con formato nb_test_* o nb_live_*. Solo se almacena su hash.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID o identificador único estable por operación y aplicación.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 100
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ApplicationId:
+      name: applicationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Environment:
+      name: environment
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [BETA, PRODUCTION]
+
+  responses:
+    BadRequest:
+      description: Solicitud mal formada
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: API key ausente, inválida o inactiva
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Recurso no encontrado dentro del tenant de la API key
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableEntity:
+      description: Datos válidos sintácticamente pero inválidos tributariamente
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    CreateEstablishment:
+      type: object
+      required: [code, name, address, ubigeo]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 10
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        address:
+          type: string
+          minLength: 3
+          maxLength: 255
+        ubigeo:
+          type: string
+          pattern: '^\d{6}$'
+
+    Establishment:
+      allOf:
+        - $ref: '#/components/schemas/CreateEstablishment'
+        - type: object
+          required: [id, tenantId, active, createdAt, updatedAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            tenantId:
+              type: string
+              format: uuid
+            active:
+              type: boolean
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    CreateFiscalSeries:
+      type: object
+      required:
+        [applicationId, establishmentId, environment, documentType, series]
+      additionalProperties: false
+      properties:
+        applicationId:
+          type: string
+          format: uuid
+        establishmentId:
+          type: string
+          format: uuid
+        environment:
+          type: string
+          enum: [BETA, PRODUCTION]
+        documentType:
+          $ref: '#/components/schemas/DocumentType'
+        series:
+          type: string
+          pattern: '^[FB][A-Z0-9]{3}$'
+        initialNumber:
+          type: integer
+          minimum: 0
+          default: 0
+
+    FiscalSeries:
+      allOf:
+        - $ref: '#/components/schemas/CreateFiscalSeries'
+        - type: object
+          required: [id, tenantId, currentNumber, active, createdAt, updatedAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            tenantId:
+              type: string
+              format: uuid
+            currentNumber:
+              type: integer
+              minimum: 0
+            active:
+              type: boolean
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    UpdateSunatCredential:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        solUsername:
+          type: string
+          minLength: 1
+          maxLength: 100
+        solPassword:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 200
+        clientId:
+          type: string
+          minLength: 1
+          maxLength: 300
+        clientSecret:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 500
+        active:
+          type: boolean
+
+    SunatCredential:
+      type: object
+      required:
+        - tenantId
+        - environment
+        - active
+        - solUsernameConfigured
+        - solPasswordConfigured
+        - clientIdConfigured
+        - clientSecretConfigured
+        - certificateConfigured
+        - certificate
+      properties:
+        id:
+          type: [string, 'null']
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        environment:
+          type: string
+          enum: [BETA, PRODUCTION]
+        active:
+          type: boolean
+        solUsernameConfigured:
+          type: boolean
+        solPasswordConfigured:
+          type: boolean
+        clientIdConfigured:
+          type: boolean
+        clientSecretConfigured:
+          type: boolean
+        certificateConfigured:
+          type: boolean
+        certificate:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SunatCertificateMetadata'
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
+
+    SunatCertificateMetadata:
+      type: object
+      required:
+        - fileName
+        - mimeType
+        - sizeBytes
+        - fingerprintSha256
+        - serialNumber
+        - subject
+        - issuer
+        - validFrom
+        - expiresAt
+        - uploadedAt
+      properties:
+        fileName:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+          maximum: 2097152
+        fingerprintSha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        serialNumber:
+          type: string
+        subject:
+          type: string
+        issuer:
+          type: string
+        validFrom:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        uploadedAt:
+          type: string
+          format: date-time
+
+    Tenant:
+      type: object
+      required: [id, ruc, legalName, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        ruc:
+          type: string
+          pattern: '^\d{11}$'
+        legalName:
+          type: string
+        tradeName:
+          type: [string, 'null']
+        address:
+          type: [string, 'null']
+        ubigeo:
+          type: [string, 'null']
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTenant:
+      type: object
+      required: [ruc, legalName]
+      additionalProperties: false
+      properties:
+        ruc:
+          type: string
+          pattern: '^\d{11}$'
+        legalName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        tradeName:
+          type: string
+          maxLength: 200
+        address:
+          type: string
+          maxLength: 255
+        ubigeo:
+          type: string
+          pattern: '^\d{6}$'
+
+    Application:
+      type: object
+      required: [id, tenantId, name, code, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateApplication:
+      type: object
+      required: [name, code]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9-]{1,49}$'
+
+    CreateApiKey:
+      type: object
+      required: [name, environment, scopes]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        environment:
+          type: string
+          enum: [BETA, PRODUCTION]
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - calculations:write
+              - documents:read
+              - documents:write
+              - webhooks:manage
+        expiresAt:
+          type: string
+          format: date-time
+
+    ApiKeyMetadata:
+      type: object
+      required: [id, name, prefix, environment, scopes, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        prefix:
+          type: string
+        environment:
+          type: string
+          enum: [BETA, PRODUCTION]
+        scopes:
+          type: array
+          items:
+            type: string
+        lastUsedAt:
+          type: [string, 'null']
+          format: date-time
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+        revokedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    ApplicationPrincipal:
+      type: object
+      required: [type, apiKeyId, applicationId, tenantId, environment, scopes]
+      properties:
+        type:
+          type: string
+          const: API_KEY
+        apiKeyId:
+          type: string
+          format: uuid
+        applicationId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        environment:
+          type: string
+          enum: [BETA, PRODUCTION]
+        scopes:
+          type: array
+          items:
+            type: string
+
+    Decimal:
+      type: string
+      pattern: '^-?[0-9]+(\.[0-9]{1,10})?$'
+      examples: ['125.50']
+
+    DocumentType:
+      type: string
+      enum: [INVOICE, RECEIPT, CREDIT_NOTE, DEBIT_NOTE]
+      description: Tipos SUNAT 01, 03, 07 y 08, respectivamente.
+
+    IssuableDocumentType:
+      type: string
+      enum: [INVOICE, RECEIPT]
+      description: Tipos que admite actualmente el motor general de facturación.
+
+    DocumentStatus:
+      type: string
+      enum:
+        - RECEIVED
+        - VALIDATING
+        - QUEUED
+        - PROCESSING
+        - ACCEPTED
+        - ACCEPTED_WITH_OBSERVATIONS
+        - REJECTED
+        - RETRY_SCHEDULED
+        - FAILED
+
+    TaxDocumentType:
+      type: string
+      enum: [NONE, DNI, FOREIGN_ID, RUC, PASSPORT, DIPLOMATIC_ID]
+
+    PaymentMethod:
+      type: string
+      enum: [CASH, CREDIT]
+
+    Discount:
+      type: object
+      required: [kind, value]
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          enum: [PERCENTAGE, AMOUNT]
+        value:
+          $ref: '#/components/schemas/Decimal'
+
+    Customer:
+      type: object
+      required: [documentType, name]
+      additionalProperties: false
+      properties:
+        documentType:
+          $ref: '#/components/schemas/TaxDocumentType'
+        documentNumber:
+          type: [string, 'null']
+          maxLength: 20
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        address:
+          type: [string, 'null']
+          maxLength: 255
+        email:
+          type: [string, 'null']
+          format: email
+
+    DocumentLineInput:
+      type: object
+      required:
+        - externalId
+        - description
+        - quantity
+        - unitCode
+        - unitPrice
+        - unitPriceIncludesTax
+        - taxAffectationCode
+      additionalProperties: false
+      properties:
+        externalId:
+          type: string
+          maxLength: 100
+        sku:
+          type: [string, 'null']
+          maxLength: 60
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        quantity:
+          $ref: '#/components/schemas/Decimal'
+        unitCode:
+          type: string
+          minLength: 2
+          maxLength: 10
+          examples: [NIU]
+        unitPrice:
+          $ref: '#/components/schemas/Decimal'
+        unitPriceIncludesTax:
+          type: boolean
+        taxAffectationCode:
+          type: string
+          enum: ['10', '20', '30']
+          description: Gravado, exonerado o inafecto en la polÃ­tica v1.
+          examples: ['10']
+        discount:
+          oneOf:
+            - $ref: '#/components/schemas/Discount'
+            - type: 'null'
+
+    Installment:
+      type: object
+      required: [number, amount, dueDate]
+      additionalProperties: false
+      properties:
+        number:
+          type: integer
+          minimum: 1
+        amount:
+          $ref: '#/components/schemas/Decimal'
+        dueDate:
+          type: string
+          format: date
+
+    PaymentTerms:
+      type: object
+      required: [method]
+      additionalProperties: false
+      properties:
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        installments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Installment'
+
+    ExpectedTotals:
+      type: object
+      required: [taxable, exempt, unaffected, tax, total]
+      additionalProperties: false
+      properties:
+        taxable:
+          $ref: '#/components/schemas/Decimal'
+        exempt:
+          $ref: '#/components/schemas/Decimal'
+        unaffected:
+          $ref: '#/components/schemas/Decimal'
+        tax:
+          $ref: '#/components/schemas/Decimal'
+        total:
+          $ref: '#/components/schemas/Decimal'
+
+    CalculationPolicy:
+      type: object
+      required:
+        [
+          version,
+          defaultIgvPercent,
+          roundingMode,
+          monetaryScale,
+          unitScale,
+          supportedTaxAffectations,
+        ]
+      properties:
+        version:
+          type: string
+        defaultIgvPercent:
+          type: string
+          const: '18'
+        roundingMode:
+          type: string
+          const: HALF_UP
+        monetaryScale:
+          type: integer
+          const: 2
+        unitScale:
+          type: integer
+          const: 10
+        supportedTaxAffectations:
+          type: array
+          items:
+            type: object
+            required: [code, category, appliesIgv]
+            properties:
+              code:
+                type: string
+                enum: ['10', '20', '30']
+              category:
+                type: string
+                enum: [TAXABLE, EXEMPT, UNAFFECTED]
+              appliesIgv:
+                type: boolean
+
+    CalculationRequest:
+      type: object
+      required: [documentType, currency, lines]
+      additionalProperties: false
+      properties:
+        documentType:
+          $ref: '#/components/schemas/IssuableDocumentType'
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          default: PEN
+        taxRate:
+          allOf:
+            - $ref: '#/components/schemas/Decimal'
+            - description: Porcentaje de IGV. Por defecto 18.
+        globalDiscount:
+          oneOf:
+            - $ref: '#/components/schemas/Discount'
+            - type: 'null'
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/DocumentLineInput'
+
+    CalculationLineResult:
+      type: object
+      required:
+        [
+          externalId,
+          taxAffectationCode,
+          taxCategory,
+          taxRate,
+          unitValue,
+          baseAmount,
+          lineDiscount,
+          globalDiscount,
+          discount,
+          lineValue,
+          tax,
+          total,
+        ]
+      properties:
+        externalId:
+          type: string
+        taxAffectationCode:
+          type: string
+          enum: ['10', '20', '30']
+        taxCategory:
+          type: string
+          enum: [TAXABLE, EXEMPT, UNAFFECTED]
+        taxRate:
+          $ref: '#/components/schemas/Decimal'
+        unitValue:
+          $ref: '#/components/schemas/Decimal'
+        baseAmount:
+          $ref: '#/components/schemas/Decimal'
+        lineDiscount:
+          $ref: '#/components/schemas/Decimal'
+        globalDiscount:
+          $ref: '#/components/schemas/Decimal'
+        discount:
+          $ref: '#/components/schemas/Decimal'
+        lineValue:
+          $ref: '#/components/schemas/Decimal'
+        tax:
+          $ref: '#/components/schemas/Decimal'
+        total:
+          $ref: '#/components/schemas/Decimal'
+
+    CalculationResult:
+      type: object
+      required:
+        [
+          calculationVersion,
+          roundingMode,
+          currency,
+          taxRate,
+          subtotal,
+          taxable,
+          exempt,
+          unaffected,
+          discount,
+          tax,
+          total,
+          lines,
+        ]
+      properties:
+        calculationVersion:
+          type: string
+          examples: [PE-SUNAT-UBL21-2026.1]
+        roundingMode:
+          type: string
+          const: HALF_UP
+        currency:
+          type: string
+        taxRate:
+          $ref: '#/components/schemas/Decimal'
+        subtotal:
+          $ref: '#/components/schemas/Decimal'
+        taxable:
+          $ref: '#/components/schemas/Decimal'
+        exempt:
+          $ref: '#/components/schemas/Decimal'
+        unaffected:
+          $ref: '#/components/schemas/Decimal'
+        discount:
+          $ref: '#/components/schemas/Decimal'
+        tax:
+          $ref: '#/components/schemas/Decimal'
+        total:
+          $ref: '#/components/schemas/Decimal'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalculationLineResult'
+
+    CreateDocumentRequest:
+      allOf:
+        - $ref: '#/components/schemas/CalculationRequest'
+        - type: object
+          required:
+            - externalId
+            - series
+            - issueDate
+            - establishmentCode
+            - customer
+            - paymentTerms
+          properties:
+            externalId:
+              type: string
+              minLength: 1
+              maxLength: 100
+              description: Identificador del documento en la aplicación de origen.
+            series:
+              type: string
+              pattern: '^[FB][A-Z0-9]{3}$'
+              description: Serie previamente asignada a la aplicación; el número lo asigna la API.
+            issueDate:
+              type: string
+              format: date
+            issueTime:
+              type: [string, 'null']
+              format: time
+            establishmentCode:
+              type: string
+              minLength: 1
+              maxLength: 10
+            customer:
+              $ref: '#/components/schemas/Customer'
+            paymentTerms:
+              $ref: '#/components/schemas/PaymentTerms'
+            expectedTotals:
+              oneOf:
+                - $ref: '#/components/schemas/ExpectedTotals'
+                - type: 'null'
+            notes:
+              type: [string, 'null']
+              maxLength: 500
+            metadata:
+              type: object
+              maxProperties: 20
+              additionalProperties:
+                type: [string, number, boolean, 'null']
+
+    TaxNoteCustomer:
+      type: object
+      required: [documentType]
+      additionalProperties: false
+      properties:
+        documentType:
+          $ref: '#/components/schemas/TaxDocumentType'
+        documentNumber:
+          type: [string, 'null']
+          maxLength: 20
+
+    TaxNoteAdjustment:
+      type: object
+      required: [referenceLineNumber, amount]
+      additionalProperties: false
+      properties:
+        referenceLineNumber:
+          type: integer
+          minimum: 1
+        quantity:
+          oneOf:
+            - $ref: '#/components/schemas/Decimal'
+            - type: 'null'
+        amount:
+          $ref: '#/components/schemas/Decimal'
+        description:
+          type: [string, 'null']
+          maxLength: 500
+
+    CreateTaxNoteRequest:
+      type: object
+      required:
+        [
+          externalId,
+          referenceDocumentId,
+          series,
+          issueDate,
+          currency,
+          reasonCode,
+          reasonDescription,
+          customer,
+          adjustments,
+        ]
+      additionalProperties: false
+      properties:
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 100
+        referenceDocumentId:
+          type: string
+          format: uuid
+        series:
+          type: string
+          pattern: '^[FB][A-Z0-9]{3}$'
+        issueDate:
+          type: string
+          format: date
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        reasonCode:
+          type: string
+          pattern: '^\d{2}$'
+          description: Catálogo SUNAT 09 para crédito o 10 para débito.
+        reasonDescription:
+          type: string
+          minLength: 3
+          maxLength: 250
+        customer:
+          $ref: '#/components/schemas/TaxNoteCustomer'
+        adjustments:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/TaxNoteAdjustment'
+
+    TaxNoteCreation:
+      type: object
+      required:
+        [
+          id,
+          externalId,
+          type,
+          status,
+          series,
+          number,
+          fullNumber,
+          environment,
+          issueDate,
+          currency,
+          reference,
+          reason,
+          validation,
+          calculation,
+          message,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        externalId:
+          type: string
+        type:
+          type: string
+          enum: [CREDIT_NOTE, DEBIT_NOTE]
+        status:
+          type: string
+          const: QUEUED
+        series:
+          type: string
+        number:
+          type: integer
+        fullNumber:
+          type: string
+        environment:
+          type: string
+          enum: [BETA, PRODUCTION]
+        issueDate:
+          type: string
+          format: date
+        currency:
+          type: string
+        reference:
+          type: object
+        reason:
+          type: object
+        validation:
+          type: object
+          required:
+            [
+              customerVerified,
+              currencyVerified,
+              sourceAccepted,
+              requestedAmount,
+              remainingTotalBefore,
+              remainingTotalAfter,
+              adjustments,
+            ]
+          properties:
+            customerVerified:
+              type: boolean
+            currencyVerified:
+              type: boolean
+            sourceAccepted:
+              type: boolean
+            requestedAmount:
+              $ref: '#/components/schemas/Decimal'
+            remainingTotalBefore:
+              type: [string, 'null']
+            remainingTotalAfter:
+              type: [string, 'null']
+            adjustments:
+              type: array
+              items:
+                type: object
+        calculation:
+          type: object
+          required: [version, taxable, exempt, unaffected, tax, total, lines]
+          properties:
+            version:
+              type: string
+              const: NOTE-TAX-v1
+            taxable:
+              $ref: '#/components/schemas/Decimal'
+            exempt:
+              $ref: '#/components/schemas/Decimal'
+            unaffected:
+              $ref: '#/components/schemas/Decimal'
+            tax:
+              $ref: '#/components/schemas/Decimal'
+            total:
+              $ref: '#/components/schemas/Decimal'
+            lines:
+              type: array
+              items:
+                type: object
+        message:
+          type: string
+
+    Document:
+      type: object
+      required:
+        - id
+        - externalId
+        - type
+        - status
+        - series
+        - number
+        - fullNumber
+        - environment
+        - currency
+        - calculationVersion
+        - issueDate
+        - paymentMethod
+        - customer
+        - totals
+        - lines
+        - installments
+        - artifacts
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        externalId:
+          type: string
+        type:
+          $ref: '#/components/schemas/DocumentType'
+        status:
+          $ref: '#/components/schemas/DocumentStatus'
+        series:
+          type: string
+        number:
+          type: integer
+          minimum: 1
+        fullNumber:
+          type: string
+          examples: [F001-00000001]
+        environment:
+          type: string
+          enum: [BETA, PRODUCTION]
+        currency:
+          type: string
+        calculationVersion:
+          type: string
+        issueDate:
+          type: string
+          format: date
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        customer:
+          $ref: '#/components/schemas/Customer'
+        reason:
+          type: [object, 'null']
+        references:
+          type: array
+          items:
+            type: object
+        noteAdjustments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxNoteAdjustment'
+        totals:
+          $ref: '#/components/schemas/DocumentTotals'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/StoredDocumentLine'
+        installments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Installment'
+        sunat:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [code, message, observations, submittedAt, respondedAt]
+              properties:
+                code:
+                  type: [string, 'null']
+                message:
+                  type: [string, 'null']
+                observations:
+                  type: array
+                  items:
+                    type: string
+                submittedAt:
+                  type: [string, 'null']
+                  format: date-time
+                respondedAt:
+                  type: [string, 'null']
+                  format: date-time
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArtifactMetadata'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DocumentTotals:
+      type: object
+      required: [taxable, exempt, unaffected, discount, tax, total]
+      properties:
+        taxable:
+          $ref: '#/components/schemas/Decimal'
+        exempt:
+          $ref: '#/components/schemas/Decimal'
+        unaffected:
+          $ref: '#/components/schemas/Decimal'
+        discount:
+          $ref: '#/components/schemas/Decimal'
+        tax:
+          $ref: '#/components/schemas/Decimal'
+        total:
+          $ref: '#/components/schemas/Decimal'
+
+    StoredDocumentLine:
+      type: object
+      required:
+        [
+          externalId,
+          description,
+          quantity,
+          unitValue,
+          discount,
+          lineValue,
+          tax,
+          total,
+        ]
+      properties:
+        externalId:
+          type: string
+        description:
+          type: string
+        quantity:
+          $ref: '#/components/schemas/Decimal'
+        unitValue:
+          $ref: '#/components/schemas/Decimal'
+        discount:
+          $ref: '#/components/schemas/Decimal'
+        lineValue:
+          $ref: '#/components/schemas/Decimal'
+        tax:
+          $ref: '#/components/schemas/Decimal'
+        total:
+          $ref: '#/components/schemas/Decimal'
+
+    ArtifactType:
+      type: string
+      enum: [XML, ZIP, CDR, PDF, PDF_A4, PDF_TICKET]
+
+    ArtifactMetadata:
+      type: object
+      required: [type, fileName, contentType, sizeBytes, sha256, createdAt]
+      properties:
+        type:
+          $ref: '#/components/schemas/ArtifactType'
+        fileName:
+          type: string
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+          minimum: 0
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        createdAt:
+          type: string
+          format: date-time
+
+    ArtifactDownload:
+      type: object
+      required:
+        [
+          type,
+          fileName,
+          contentType,
+          sizeBytes,
+          sha256,
+          createdAt,
+          url,
+          expiresAt,
+        ]
+      properties:
+        type:
+          $ref: '#/components/schemas/ArtifactType'
+        fileName:
+          type: string
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+          minimum: 0
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        createdAt:
+          type: string
+          format: date-time
+        url:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+
+    WebhookEventType:
+      type: string
+      enum:
+        - document.processing
+        - document.accepted
+        - document.accepted_with_observations
+        - document.rejected
+        - document.retry_scheduled
+        - document.failed
+        - despatch_guide.accepted
+        - despatch_guide.accepted_with_observations
+        - despatch_guide.rejected
+
+    CreateWebhookEndpoint:
+      type: object
+      additionalProperties: false
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+          pattern: '^https://'
+          maxLength: 500
+        events:
+          type: array
+          minItems: 1
+          maxItems: 9
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/WebhookEventType'
+
+    UpdateWebhookEndpoint:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        url:
+          type: string
+          format: uri
+          pattern: '^https://'
+          maxLength: 500
+        events:
+          type: array
+          minItems: 1
+          maxItems: 9
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/WebhookEventType'
+        active:
+          type: boolean
+
+    WebhookEndpoint:
+      type: object
+      required: [id, environment, url, events, active, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        environment:
+          type: string
+          enum: [BETA, PRODUCTION]
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookEventType'
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    WebhookEndpointWithSecret:
+      allOf:
+        - $ref: '#/components/schemas/WebhookEndpoint'
+        - type: object
+          required: [signingSecret]
+          properties:
+            signingSecret:
+              type: string
+              pattern: '^whsec_[A-Za-z0-9_-]{43}$'
+
+    DespatchGuideStatus:
+      type: string
+      enum:
+        - REGISTERED
+        - PROCESSING
+        - ACCEPTED
+        - ACCEPTED_WITH_OBSERVATIONS
+        - REJECTED
+        - FAILED
+        - CANCELLATION_REQUESTED
+        - CANCELLED
+
+    DespatchParty:
+      type: object
+      required: [documentType, documentNumber, name]
+      properties:
+        documentType:
+          type: string
+          enum: [DNI, FOREIGN_ID, RUC, PASSPORT]
+        documentNumber: { type: string, maxLength: 20 }
+        name: { type: string, maxLength: 200 }
+        address: { type: [string, 'null'], maxLength: 255 }
+        ubigeo: { type: [string, 'null'], pattern: '^\d{6}$' }
+
+    DespatchAddress:
+      type: object
+      required: [ubigeo, address]
+      properties:
+        ubigeo: { type: string, pattern: '^\d{6}$' }
+        address: { type: string, minLength: 3, maxLength: 255 }
+
+    DespatchCarrier:
+      type: object
+      required: [ruc, legalName]
+      properties:
+        ruc: { type: string, pattern: '^\d{11}$' }
+        legalName: { type: string, maxLength: 200 }
+        mtcRegistrationNumber: { type: [string, 'null'], maxLength: 30 }
+
+    DespatchVehicle:
+      type: object
+      required: [plate, primary]
+      properties:
+        plate: { type: string, pattern: '^[A-Z0-9-]{5,10}$' }
+        brand: { type: [string, 'null'], maxLength: 60 }
+        authorizationNumber: { type: [string, 'null'], maxLength: 50 }
+        primary: { type: boolean }
+
+    DespatchDriver:
+      type: object
+      required:
+        [
+          documentType,
+          documentNumber,
+          firstNames,
+          lastNames,
+          licenseNumber,
+          primary,
+        ]
+      properties:
+        documentType:
+          type: string
+          enum: [DNI, FOREIGN_ID, RUC, PASSPORT]
+        documentNumber: { type: string, maxLength: 20 }
+        firstNames: { type: string, maxLength: 100 }
+        lastNames: { type: string, maxLength: 100 }
+        licenseNumber: { type: string, maxLength: 30 }
+        primary: { type: boolean }
+
+    DespatchItem:
+      type: object
+      required: [externalId, description, quantity, unitCode]
+      properties:
+        externalId: { type: string, maxLength: 100 }
+        sku: { type: [string, 'null'], maxLength: 60 }
+        description: { type: string, maxLength: 500 }
+        quantity: { type: string, pattern: '^\d+(\.\d{1,10})?$' }
+        unitCode: { type: string, maxLength: 10 }
+
+    CreateDespatchGuide:
+      type: object
+      required:
+        - externalId
+        - series
+        - issueDate
+        - transferStartDate
+        - transferReasonCode
+        - transportMode
+        - grossWeight
+        - recipient
+        - departure
+        - items
+      properties:
+        externalId: { type: string, maxLength: 100 }
+        series: { type: string, pattern: '^T[A-Z0-9]{3}$' }
+        issueDate: { type: string, format: date }
+        transferStartDate: { type: string, format: date }
+        carrierDeliveryDate: { type: [string, 'null'], format: date }
+        transferReasonCode:
+          type: string
+          enum:
+            [
+              '01',
+              '02',
+              '03',
+              '04',
+              '05',
+              '06',
+              '07',
+              '08',
+              '09',
+              '13',
+              '14',
+              '17',
+              '18',
+              '19',
+            ]
+        transferReasonDescription: { type: [string, 'null'], maxLength: 100 }
+        transportMode: { type: string, enum: [PUBLIC, PRIVATE] }
+        grossWeight: { type: string, pattern: '^\d{1,12}(\.\d{1,3})?$' }
+        weightUnit: { type: string, default: KGM, enum: [KGM, TNE] }
+        packageCount: { type: [integer, 'null'], minimum: 1 }
+        recipient:
+          $ref: '#/components/schemas/DespatchParty'
+        departure:
+          $ref: '#/components/schemas/DespatchAddress'
+        arrival:
+          oneOf:
+            - $ref: '#/components/schemas/DespatchAddress'
+            - type: 'null'
+        carrier:
+          oneOf:
+            - $ref: '#/components/schemas/DespatchCarrier'
+            - type: 'null'
+        vehicles:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/DespatchVehicle'
+        drivers:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/DespatchDriver'
+        items:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/DespatchItem'
+        relatedDocument:
+          type: [object, 'null']
+          properties:
+            documentType:
+              type: string
+              enum:
+                [
+                  '01',
+                  '03',
+                  '04',
+                  '09',
+                  '12',
+                  '48',
+                  '49',
+                  '50',
+                  '52',
+                  '71',
+                  '72',
+                  '73',
+                  '74',
+                  '75',
+                  '76',
+                  '77',
+                  '78',
+                  '80',
+                  '81',
+                  '91',
+                  '92',
+                ]
+            number: { type: string, maxLength: 100 }
+        metadata:
+          type: object
+          additionalProperties:
+            type: [string, number, boolean, 'null']
+
+    DespatchGuide:
+      type: object
+      required:
+        - id
+        - externalId
+        - type
+        - status
+        - series
+        - number
+        - fullNumber
+        - environment
+        - issueDate
+        - transfer
+        - recipient
+        - carrier
+        - vehicles
+        - drivers
+        - items
+        - relatedDocument
+        - cancellation
+        - sunat
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, format: uuid }
+        externalId: { type: string }
+        type: { type: string, const: DESPATCH_GUIDE }
+        status:
+          $ref: '#/components/schemas/DespatchGuideStatus'
+        series: { type: string, pattern: '^T[A-Z0-9]{3}$' }
+        number: { type: integer, minimum: 1 }
+        fullNumber: { type: string }
+        environment: { type: string, enum: [BETA, PRODUCTION] }
+        issueDate: { type: string, format: date }
+        transfer:
+          type: object
+          required:
+            - startDate
+            - deliveryDateToCarrier
+            - reasonCode
+            - reasonName
+            - reasonDescription
+            - transportMode
+            - transportModeCode
+            - grossWeight
+            - weightUnit
+            - packageCount
+            - departure
+            - arrival
+          properties:
+            startDate: { type: string, format: date }
+            deliveryDateToCarrier: { type: [string, 'null'], format: date }
+            reasonCode: { type: string }
+            reasonName: { type: [string, 'null'] }
+            reasonDescription: { type: [string, 'null'] }
+            transportMode: { type: string, enum: [PUBLIC, PRIVATE] }
+            transportModeCode: { type: string, enum: ['01', '02'] }
+            grossWeight: { type: string }
+            weightUnit: { type: string }
+            packageCount: { type: [integer, 'null'] }
+            departure:
+              $ref: '#/components/schemas/DespatchAddress'
+            arrival:
+              oneOf:
+                - $ref: '#/components/schemas/DespatchAddress'
+                - type: 'null'
+        recipient:
+          oneOf:
+            - $ref: '#/components/schemas/DespatchParty'
+            - type: 'null'
+        carrier:
+          oneOf:
+            - $ref: '#/components/schemas/DespatchCarrier'
+            - type: 'null'
+        vehicles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DespatchVehicle'
+        drivers:
+          type: array
+          items:
+            $ref: '#/components/schemas/DespatchDriver'
+        items:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/DespatchItem'
+              - type: object
+                required: [lineNumber]
+                properties:
+                  lineNumber: { type: integer, minimum: 1 }
+        relatedDocument:
+          oneOf:
+            - type: object
+              required: [documentType, number]
+              properties:
+                documentType: { type: string }
+                number: { type: string }
+            - type: 'null'
+        cancellation:
+          oneOf:
+            - type: object
+              required: [reason, requestedAt, cancelledAt]
+              properties:
+                reason: { type: string }
+                requestedAt: { type: [string, 'null'], format: date-time }
+                cancelledAt: { type: [string, 'null'], format: date-time }
+            - type: 'null'
+        sunat:
+          oneOf:
+            - type: object
+              required: [code, message, observations, submittedAt, respondedAt]
+              properties:
+                code: { type: [string, 'null'] }
+                message: { type: [string, 'null'] }
+                observations: { type: [array, 'null'], items: { type: string } }
+                submittedAt: { type: [string, 'null'], format: date-time }
+                respondedAt: { type: [string, 'null'], format: date-time }
+            - type: 'null'
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Problem:
+      type: object
+      required: [type, title, status, requestId]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        requestId:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code, message]
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
