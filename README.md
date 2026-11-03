@@ -48,6 +48,13 @@ docker compose --env-file .env.production up -d --build
 docker compose ps
 ```
 
+Con Docker Compose clásico use:
+
+```bash
+docker-compose --env-file .env.production up -d --build
+docker-compose --env-file .env.production ps
+```
+
 La API queda disponible únicamente en `127.0.0.1:3100` para conectarla de forma segura a Nginx, Caddy o Traefik y publicar `https://billing-api.nuvex.pe`. PostgreSQL no expone ningún puerto al exterior.
 
 La API expone `GET /v1/health`. El worker consume la cola PostgreSQL, genera XML/ZIP firmados, usa `sendBill` para facturas y `sendSummary`/`getStatus` para boletas mediante Resumen Diario en SUNAT BETA, almacena el CDR y aplica reintentos durables.

@@ -1,13 +1,12 @@
 # Despliegue con Docker Compose
 
-El stack es independiente y contiene cuatro servicios:
+El stack es independiente y contiene tres servicios:
 
 - `postgres`: base de datos privada con volumen persistente.
-- `migrate`: ejecuta `prisma migrate deploy` y termina correctamente.
-- `api`: expone la API HTTP en `127.0.0.1:3100`.
+- `api`: ejecuta `prisma migrate deploy` y después expone la API HTTP en `127.0.0.1:3100`.
 - `worker`: procesa emisiones SUNAT, bajas y webhooks.
 
-API, worker y migraciones reciben automáticamente esta conexión interna:
+API y worker reciben automáticamente esta conexión interna:
 
 ```text
 postgresql://usuario:clave@postgres:5432/nuvex_billing?schema=public
@@ -33,11 +32,19 @@ docker compose --env-file .env.production up -d --build
 docker compose --env-file .env.production ps
 ```
 
+En servidores que usan Docker Compose clásico:
+
+```bash
+docker-compose --env-file .env.production config
+docker-compose --env-file .env.production up -d --build
+docker-compose --env-file .env.production ps
+```
+
 El orden automático es:
 
 1. PostgreSQL inicia y supera su healthcheck.
-2. Prisma ejecuta todas las migraciones pendientes.
-3. API y worker comienzan únicamente si las migraciones terminaron bien.
+2. La API ejecuta todas las migraciones pendientes y comienza a escuchar.
+3. El worker inicia únicamente cuando la API supera su healthcheck.
 
 ## Verificación
 

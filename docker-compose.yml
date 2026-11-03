@@ -1,4 +1,4 @@
-name: nuvex-billing
+version: '2.4'
 
 x-billing-service: &billing-service
   image: nuvex-billing-service:${IMAGE_TAG:-latest}
@@ -39,26 +39,18 @@ services:
     networks:
       - billing-network
 
-  migrate:
-    <<: *billing-service
-    restart: 'no'
-    command: ['npx', 'prisma', 'migrate', 'deploy']
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   api:
     <<: *billing-service
     restart: unless-stopped
     command:
-      - node
-      - --enable-source-maps
-      - dist/apps/api/apps/api/src/main.js
+      - sh
+      - -c
+      - npx prisma migrate deploy && node --enable-source-maps dist/apps/api/apps/api/src/main.js
     ports:
       - '127.0.0.1:${API_PUBLISHED_PORT:-3100}:3100'
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -79,16 +71,14 @@ services:
       - --enable-source-maps
       - dist/apps/worker/apps/worker/src/main.js
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      api:
+        condition: service_healthy
     healthcheck:
       disable: true
 
 volumes:
   billing-postgres-data:
-    name: nuvex-billing-postgres-data
 
 networks:
   billing-network:
-    name: nuvex-billing-network
     driver: bridge
