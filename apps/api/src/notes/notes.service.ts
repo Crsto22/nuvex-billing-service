@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { PrismaService } from '../../../../libs/database/src/prisma.service';
 import type { ApplicationPrincipal } from '../auth/auth.types';
 import type { RequestWithId } from '../common/request-id.middleware';
+import { toTenantBrandingSnapshot } from '../branding/tenant-branding.snapshot';
 import { CreateTaxNoteDto } from './dto/create-tax-note.dto';
 import { NoteTaxCalculatorService } from './note-tax-calculator.service';
 
@@ -100,6 +101,7 @@ export class NotesService {
               },
               include: {
                 lines: true,
+                tenant: { include: { branding: true } },
                 referencedBy: {
                   include: {
                     document: { include: { noteAdjustments: true } },
@@ -165,6 +167,9 @@ export class NotesService {
                 paymentMethod: source.paymentMethod,
                 calculationVersion: calculation.calculationVersion,
                 issuerSnapshot: source.issuerSnapshot as Prisma.InputJsonValue,
+                brandingSnapshot: toTenantBrandingSnapshot(
+                  source.tenant.branding,
+                ),
                 customerSnapshot:
                   source.customerSnapshot as Prisma.InputJsonValue,
                 requestPayload: dto as unknown as Prisma.InputJsonValue,

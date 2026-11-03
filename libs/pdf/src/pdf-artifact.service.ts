@@ -9,6 +9,7 @@ import { PrismaService } from '../../database/src/prisma.service';
 import { PrivateObjectStorageService } from '../../storage/src/private-object-storage.service';
 import { PdfRendererService } from './pdf-renderer.service';
 import type { PdfFormat } from './pdf.types';
+import { BrandingLogoResolverService } from './branding-logo-resolver.service';
 
 const PDF_FORMATS: ReadonlyArray<{
   type: ArtifactType;
@@ -25,6 +26,7 @@ export class PdfArtifactService {
     private readonly prisma: PrismaService,
     private readonly storage: PrivateObjectStorageService,
     private readonly renderer: PdfRendererService,
+    private readonly brandingLogo: BrandingLogoResolverService,
   ) {}
 
   async generate(documentId: string) {
@@ -58,6 +60,7 @@ export class PdfArtifactService {
 
     const baseName = zip.fileName.slice(0, -4);
     const prefix = zip.objectKey.slice(0, zip.objectKey.lastIndexOf('/') + 1);
+    const logo = await this.brandingLogo.load(document.brandingSnapshot);
     const results = [];
     for (const definition of PDF_FORMATS) {
       const persisted = existing.get(definition.type);
@@ -65,7 +68,11 @@ export class PdfArtifactService {
         results.push(persisted);
         continue;
       }
-      const body = await this.renderer.render(document, definition.format);
+      const body = await this.renderer.render(
+        document,
+        definition.format,
+        logo,
+      );
       const fileName = `${baseName}.${definition.suffix}.pdf`;
       const objectKey = `${prefix}${fileName}`;
       await this.storage.put(objectKey, body, 'application/pdf');

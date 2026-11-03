@@ -7,8 +7,9 @@ import { createHash } from 'node:crypto';
 import { PrismaService } from '../../database/src/prisma.service';
 import { PrivateObjectStorageService } from '../../storage/src/private-object-storage.service';
 import { DespatchGuidePdfRendererService } from './despatch-guide-pdf-renderer.service';
+import { BrandingLogoResolverService } from './branding-logo-resolver.service';
 
-const DESPATCH_GUIDE_A4_TEMPLATE_VERSION = 2;
+const DESPATCH_GUIDE_A4_TEMPLATE_VERSION = 3;
 
 @Injectable()
 export class DespatchGuidePdfArtifactService {
@@ -16,6 +17,7 @@ export class DespatchGuidePdfArtifactService {
     private readonly prisma: PrismaService,
     private readonly storage: PrivateObjectStorageService,
     private readonly renderer: DespatchGuidePdfRendererService,
+    private readonly brandingLogo: BrandingLogoResolverService,
   ) {}
 
   async generate(guideId: string) {
@@ -45,7 +47,8 @@ export class DespatchGuidePdfArtifactService {
     const zip = guide.artifacts.find((artifact) => artifact.type === 'ZIP');
     if (!zip) throw new ConflictException('La GRE no tiene ZIP firmado');
 
-    const body = await this.renderer.render(guide);
+    const logo = await this.brandingLogo.load(guide.brandingSnapshot);
+    const body = await this.renderer.render(guide, logo);
     const baseName = zip.fileName.slice(0, -4);
     const fileName = `${baseName}.a4-v${DESPATCH_GUIDE_A4_TEMPLATE_VERSION}.pdf`;
     const prefix = zip.objectKey.slice(0, zip.objectKey.lastIndexOf('/') + 1);

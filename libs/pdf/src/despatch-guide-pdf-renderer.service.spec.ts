@@ -2,6 +2,9 @@ import { Prisma } from '@prisma/client';
 import { DespatchGuidePdfRendererService } from './despatch-guide-pdf-renderer.service';
 import { DespatchGuideQrService } from './despatch-guide-qr.service';
 import { PdfDespatchGuide } from './despatch-guide-pdf.types';
+import sharp from 'sharp';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 describe('DespatchGuidePdfRendererService', () => {
   const renderer = new DespatchGuidePdfRendererService(
@@ -11,9 +14,33 @@ describe('DespatchGuidePdfRendererService', () => {
   it.each(['PRIVATE', 'PUBLIC'] as const)(
     'genera un PDF A4 válido para transporte %s',
     async (mode) => {
-      const result = await renderer.render(guide(mode));
+      const body = await sharp({
+        create: {
+          width: 240,
+          height: 80,
+          channels: 4,
+          background: { r: 20, g: 55, b: 95, alpha: 1 },
+        },
+      })
+        .png()
+        .toBuffer();
+      const result = await renderer.render(guide(mode), {
+        body,
+        version: 1,
+        width: 240,
+        height: 80,
+      });
       expect(result.subarray(0, 5).toString()).toBe('%PDF-');
       expect(result.length).toBeGreaterThan(3_000);
+      const output = process.env.PDF_VISUAL_QA_OUTPUT;
+      if (output) {
+        const directory = resolve(output);
+        await mkdir(directory, { recursive: true });
+        await writeFile(
+          resolve(directory, `gre-${mode.toLowerCase()}.pdf`),
+          result,
+        );
+      }
     },
     20_000,
   );

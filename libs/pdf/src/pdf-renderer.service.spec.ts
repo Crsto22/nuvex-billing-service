@@ -2,6 +2,9 @@ import { Prisma } from '@prisma/client';
 import { PdfRendererService } from './pdf-renderer.service';
 import { PdfTaxDocument } from './pdf.types';
 import { SunatQrService } from './sunat-qr.service';
+import sharp from 'sharp';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 describe('PdfRendererService', () => {
   const renderer = new PdfRendererService(new SunatQrService());
@@ -18,14 +21,44 @@ describe('PdfRendererService', () => {
   ] as const)(
     'genera un PDF válido para %s en formato %s',
     async (documentType, format) => {
-      const result = await renderer.render(fixture(documentType), format);
+      const result = await renderer.render(
+        fixture(documentType),
+        format,
+        await testLogo(),
+      );
 
       expect(result.subarray(0, 5).toString()).toBe('%PDF-');
       expect(result.length).toBeGreaterThan(2_000);
+      await saveVisual(
+        `${documentType.toLowerCase()}-${format.toLowerCase()}.pdf`,
+        result,
+      );
     },
     20_000,
   );
 });
+
+async function testLogo() {
+  const body = await sharp({
+    create: {
+      width: 240,
+      height: 80,
+      channels: 4,
+      background: { r: 20, g: 55, b: 95, alpha: 1 },
+    },
+  })
+    .png()
+    .toBuffer();
+  return { body, version: 1, width: 240, height: 80 };
+}
+
+async function saveVisual(fileName: string, body: Buffer) {
+  const output = process.env.PDF_VISUAL_QA_OUTPUT;
+  if (!output) return;
+  const directory = resolve(output);
+  await mkdir(directory, { recursive: true });
+  await writeFile(resolve(directory, fileName), body);
+}
 
 function fixture(
   documentType: 'INVOICE' | 'RECEIPT' | 'CREDIT_NOTE' | 'DEBIT_NOTE',

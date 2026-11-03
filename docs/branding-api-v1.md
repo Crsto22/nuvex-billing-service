@@ -35,3 +35,21 @@ La API elimina metadatos y genera:
 - `logo-preview.webp`: máximo 320 × 128 px.
 
 Todas las variantes mantienen la proporción, no agrandan imágenes pequeñas y se almacenan privadamente bajo `tenants/{tenantId}/branding/logos/{versionId}/...`.
+
+## Snapshot histórico
+
+Al crear una factura, boleta, nota de crédito, nota de débito o GRE, la API copia al documento la versión, clave privada, tamaño, dimensiones y SHA-256 del logo vigente. Ese snapshot es inmutable.
+
+Si la empresa reemplaza el logo, los nuevos comprobantes usan la nueva versión y los anteriores conservan la versión con la que fueron emitidos. Las versiones antiguas no se eliminan de R2 porque pueden ser necesarias para regenerar una representación impresa histórica.
+
+Antes de renderizar, el generador descarga el logo fijado desde R2 y verifica su tamaño y SHA-256. Una diferencia de integridad interrumpe la generación del PDF.
+
+## PDF que utilizan el logo
+
+- Factura: A4 y ticket.
+- Boleta: A4 y ticket.
+- Nota de crédito: A4 y ticket.
+- Nota de débito: A4 y ticket.
+- Guía de remisión remitente: A4.
+
+Las empresas que no tengan logo configurado continúan usando el nombre comercial o la razón social como encabezado.

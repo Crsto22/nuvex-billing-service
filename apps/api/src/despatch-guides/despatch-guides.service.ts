@@ -17,6 +17,7 @@ import { DespatchGuideCdrService } from '../../../../libs/sunat/src/despatch-gui
 import { DespatchGuidePdfArtifactService } from '../../../../libs/pdf/src/despatch-guide-pdf-artifact.service';
 import type { ApplicationPrincipal } from '../auth/auth.types';
 import type { RequestWithId } from '../common/request-id.middleware';
+import { toTenantBrandingSnapshot } from '../branding/tenant-branding.snapshot';
 import {
   CancelDespatchGuideDto,
   CreateDespatchGuideDto,
@@ -107,7 +108,10 @@ export class DespatchGuidesService {
               active: true,
               establishment: { active: true },
             },
-            include: { tenant: true, establishment: true },
+            include: {
+              tenant: { include: { branding: true } },
+              establishment: true,
+            },
           });
           if (!series) {
             throw new BadRequestException(
@@ -180,6 +184,9 @@ export class DespatchGuidesService {
                 ubigeo: series.establishment.ubigeo,
                 establishmentCode: series.establishment.code,
               },
+              brandingSnapshot: toTenantBrandingSnapshot(
+                series.tenant.branding,
+              ),
               requestPayload: dto as unknown as Prisma.InputJsonValue,
               metadata: dto.metadata,
               recipient: {

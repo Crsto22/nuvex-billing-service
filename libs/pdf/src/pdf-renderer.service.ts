@@ -3,6 +3,7 @@ import PDFDocument from 'pdfkit';
 import { amountInWords } from './amount-in-words';
 import { PdfCustomer, PdfFormat, PdfIssuer, PdfTaxDocument } from './pdf.types';
 import { SunatQrService } from './sunat-qr.service';
+import type { ResolvedBrandingLogo } from './branding-logo-resolver.service';
 
 const INK = '#111111';
 const BORDER = '#8A8A8A';
@@ -13,12 +14,22 @@ const MUTED = '#555555';
 export class PdfRendererService {
   constructor(private readonly qr: SunatQrService) {}
 
-  async render(document: PdfTaxDocument, format: PdfFormat): Promise<Buffer> {
+  async render(
+    document: PdfTaxDocument,
+    format: PdfFormat,
+    logo?: ResolvedBrandingLogo,
+  ): Promise<Buffer> {
     const qr = await this.qr.png(document);
-    return format === 'A4' ? this.a4(document, qr) : this.ticket(document, qr);
+    return format === 'A4'
+      ? this.a4(document, qr, logo)
+      : this.ticket(document, qr, logo);
   }
 
-  private a4(document: PdfTaxDocument, qr: Buffer) {
+  private a4(
+    document: PdfTaxDocument,
+    qr: Buffer,
+    logo?: ResolvedBrandingLogo,
+  ) {
     const pdf = new PDFDocument({
       size: 'A4',
       margins: { top: 34, left: 38, right: 38, bottom: 34 },
@@ -29,7 +40,7 @@ export class PdfRendererService {
     const issuer = document.issuerSnapshot as unknown as PdfIssuer;
     const customer = document.customerSnapshot as unknown as PdfCustomer;
 
-    this.a4Header(pdf, document, issuer);
+    this.a4Header(pdf, document, issuer, logo);
     this.a4Customer(pdf, document, customer);
 
     const note = this.isNote(document);
@@ -85,15 +96,20 @@ export class PdfRendererService {
     pdf: PDFKit.PDFDocument,
     document: PdfTaxDocument,
     issuer: PdfIssuer,
+    logo?: ResolvedBrandingLogo,
   ) {
-    pdf
-      .fillColor(INK)
-      .font('Helvetica-Bold')
-      .fontSize(24)
-      .text(issuer.tradeName || issuer.legalName, 42, 54, {
-        width: 270,
-        align: 'center',
-      });
+    if (logo) {
+      this.logo(pdf, logo, 42, 43, 270, 58);
+    } else {
+      pdf
+        .fillColor(INK)
+        .font('Helvetica-Bold')
+        .fontSize(24)
+        .text(issuer.tradeName || issuer.legalName, 42, 54, {
+          width: 270,
+          align: 'center',
+        });
+    }
     pdf
       .font('Helvetica-Bold')
       .fontSize(9)
@@ -300,7 +316,11 @@ export class PdfRendererService {
       );
   }
 
-  private ticket(document: PdfTaxDocument, qr: Buffer) {
+  private ticket(
+    document: PdfTaxDocument,
+    qr: Buffer,
+    logo?: ResolvedBrandingLogo,
+  ) {
     const estimated =
       485 +
       document.lines.length * 34 +
@@ -318,15 +338,20 @@ export class PdfRendererService {
     const width = 200.77;
     let y = 22;
 
-    pdf
-      .fillColor(INK)
-      .font('Helvetica-Bold')
-      .fontSize(18)
-      .text(issuer.tradeName || issuer.legalName, 13, y, {
-        width,
-        align: 'center',
-      });
-    y = pdf.y + 17;
+    if (logo) {
+      this.logo(pdf, logo, 38, y, 150, 55);
+      y += 68;
+    } else {
+      pdf
+        .fillColor(INK)
+        .font('Helvetica-Bold')
+        .fontSize(18)
+        .text(issuer.tradeName || issuer.legalName, 13, y, {
+          width,
+          align: 'center',
+        });
+      y = pdf.y + 17;
+    }
     pdf.font('Courier-Bold').fontSize(8).text(issuer.legalName, 13, y, {
       width,
       align: 'center',
@@ -482,9 +507,13 @@ export class PdfRendererService {
     y: number,
     width: number,
   ) {
-    pdf.font('Courier-Bold').text(`${label}:`, 13, y, { width: 55 });
-    pdf.font('Courier').text(value, 68, y, { width: width - 55 });
-    return Math.max(y + 12, pdf.y + 3);
+    pdf.font('Courier-Bold');
+    const labelHeight = pdf.heightOfString(`${label}:`, { width: 55 });
+    pdf.text(`${label}:`, 13, y, { width: 55 });
+    pdf.font('Courier');
+    const valueHeight = pdf.heightOfString(value, { width: width - 55 });
+    pdf.text(value, 68, y, { width: width - 55 });
+    return y + Math.max(12, labelHeight, valueHeight) + 3;
   }
 
   private ticketRule(pdf: PDFKit.PDFDocument, y: number) {
@@ -594,5 +623,24 @@ export class PdfRendererService {
           lineBreak: false,
         });
     }
+  }
+
+  private logo(
+    pdf: PDFKit.PDFDocument,
+    logo: ResolvedBrandingLogo,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ) {
+    const scale = Math.min(width / logo.width, height / logo.height, 1);
+    const renderedWidth = logo.width * scale;
+    const renderedHeight = logo.height * scale;
+    pdf.image(
+      logo.body,
+      x + (width - renderedWidth) / 2,
+      y + (height - renderedHeight) / 2,
+      { width: renderedWidth, height: renderedHeight },
+    );
   }
 }

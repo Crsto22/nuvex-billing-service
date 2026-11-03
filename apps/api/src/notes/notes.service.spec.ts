@@ -18,7 +18,7 @@ describe('NotesService', () => {
   const request = { requestId: 'request-id', ip: '127.0.0.1' } as never;
 
   it('validates and reserves an available credit balance', async () => {
-    const { service, tx } = setup();
+    const { service, tx, capture } = setup();
     const result = await service.create(
       'CREDIT_NOTE',
       dto(),
@@ -31,6 +31,9 @@ describe('NotesService', () => {
     expect(result.validation.remainingTotalAfter).toBe('68.00');
     expect(result.calculation.tax).toBe('7.63');
     expect(tx.taxDocument.create).toHaveBeenCalled();
+    expect(capture.createdDocument?.brandingSnapshot).toMatchObject({
+      version: 2,
+    });
   });
 
   it('rejects a source document not accepted by SUNAT', async () => {
@@ -173,6 +176,7 @@ function dto(overrides: Record<string, unknown> = {}) {
 }
 
 function setup(sourceOverrides: Record<string, unknown> = {}) {
+  const capture: { createdDocument?: Record<string, unknown> } = {};
   const source = {
     id: 'f816b0d3-9c8c-45d9-bcab-a8d729b6a230',
     tenantId: 'tenant-id',
@@ -185,6 +189,16 @@ function setup(sourceOverrides: Record<string, unknown> = {}) {
     currency: 'PEN',
     paymentMethod: 'CASH',
     issuerSnapshot: { ruc: '20615136663' },
+    tenant: {
+      branding: {
+        version: 2,
+        pdfObjectKey: 'tenant/logo-v2.png',
+        pdfSizeBytes: 100,
+        pdfSha256: 'a'.repeat(64),
+        pdfWidth: 800,
+        pdfHeight: 320,
+      },
+    },
     customerSnapshot: {
       documentType: CustomerDocumentType.RUC,
       documentNumber: '20123456789',
@@ -217,14 +231,17 @@ function setup(sourceOverrides: Record<string, unknown> = {}) {
       findFirst: jest.fn().mockResolvedValue(source),
       create: jest
         .fn()
-        .mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
-          id: '14b64a48-3632-47eb-804d-2d7bb70bd35e',
-          externalId: String(data.externalId),
-          environment: String(data.environment),
-          series: String(data.series),
-          number: 1,
-          currency: String(data.currency),
-        })),
+        .mockImplementation(({ data }: { data: Record<string, unknown> }) => {
+          capture.createdDocument = data;
+          return {
+            id: '14b64a48-3632-47eb-804d-2d7bb70bd35e',
+            externalId: String(data.externalId),
+            environment: String(data.environment),
+            series: String(data.series),
+            number: 1,
+            currency: String(data.currency),
+          };
+        }),
     },
     fiscalSeries: {
       findFirst: jest.fn().mockResolvedValue({ id: 'series-id' }),
@@ -243,5 +260,6 @@ function setup(sourceOverrides: Record<string, unknown> = {}) {
   return {
     service: new NotesService(prisma, new NoteTaxCalculatorService()),
     tx,
+    capture,
   };
 }

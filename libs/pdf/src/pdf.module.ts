@@ -6,6 +6,7 @@ import { SunatQrService } from './sunat-qr.service';
 import { DespatchGuideQrService } from './despatch-guide-qr.service';
 import { DespatchGuidePdfRendererService } from './despatch-guide-pdf-renderer.service';
 import { DespatchGuidePdfArtifactService } from './despatch-guide-pdf-artifact.service';
+import { BrandingLogoResolverService } from './branding-logo-resolver.service';
 
 @Module({
   imports: [StorageModule],
@@ -16,6 +17,7 @@ import { DespatchGuidePdfArtifactService } from './despatch-guide-pdf-artifact.s
     DespatchGuideQrService,
     DespatchGuidePdfRendererService,
     DespatchGuidePdfArtifactService,
+    BrandingLogoResolverService,
   ],
   exports: [
     PdfArtifactService,
@@ -24,6 +26,7 @@ import { DespatchGuidePdfArtifactService } from './despatch-guide-pdf-artifact.s
     DespatchGuideQrService,
     DespatchGuidePdfRendererService,
     DespatchGuidePdfArtifactService,
+    BrandingLogoResolverService,
   ],
 })
 export class PdfModule {}

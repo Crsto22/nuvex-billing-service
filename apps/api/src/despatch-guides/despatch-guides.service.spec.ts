@@ -20,7 +20,7 @@ describe('DespatchGuidesService', () => {
   const request = { requestId: 'request-id', ip: '127.0.0.1' } as never;
 
   it('registra una GRE remitente privada y reserva el correlativo T', async () => {
-    const { service, tx } = setup();
+    const { service, tx, capture } = setup();
 
     const result = await service.create(
       dto(),
@@ -43,6 +43,9 @@ describe('DespatchGuidesService', () => {
       data: { currentNumber: { increment: 1 } },
     });
     expect(tx.despatchGuide.create).toHaveBeenCalled();
+    expect(capture.createdGuide?.brandingSnapshot).toMatchObject({
+      version: 3,
+    });
   });
 
   it('exige transportista para transporte público', async () => {
@@ -226,6 +229,7 @@ function dto(overrides: Partial<CreateDespatchGuideDto> = {}) {
 
 function setup() {
   const guide = storedGuide();
+  const capture: { createdGuide?: Record<string, unknown> } = {};
   const tx = {
     idempotencyRecord: {
       findUnique: jest.fn().mockResolvedValue(null),
@@ -241,6 +245,14 @@ function setup() {
           tradeName: 'CORDEX T & D',
           address: 'AV. LOS CIRUELOS 500',
           ubigeo: '150132',
+          branding: {
+            version: 3,
+            pdfObjectKey: 'tenant/logo-v3.png',
+            pdfSizeBytes: 100,
+            pdfSha256: 'b'.repeat(64),
+            pdfWidth: 800,
+            pdfHeight: 320,
+          },
         },
         establishment: {
           code: '0000',
@@ -251,7 +263,12 @@ function setup() {
       update: jest.fn().mockResolvedValue({ currentNumber: 1 }),
     },
     despatchGuide: {
-      create: jest.fn().mockResolvedValue(guide),
+      create: jest
+        .fn()
+        .mockImplementation(({ data }: { data: Record<string, unknown> }) => {
+          capture.createdGuide = data;
+          return Promise.resolve(guide);
+        }),
     },
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
   };
@@ -270,6 +287,7 @@ function setup() {
       {} as never,
     ),
     tx,
+    capture,
   };
 }
 

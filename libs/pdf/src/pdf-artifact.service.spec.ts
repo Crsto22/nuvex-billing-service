@@ -3,6 +3,7 @@ import { PrismaService } from '../../database/src/prisma.service';
 import { PrivateObjectStorageService } from '../../storage/src/private-object-storage.service';
 import { PdfArtifactService } from './pdf-artifact.service';
 import { PdfRendererService } from './pdf-renderer.service';
+import { BrandingLogoResolverService } from './branding-logo-resolver.service';
 
 describe('PdfArtifactService', () => {
   it('genera y persiste A4 y ticket para un comprobante aceptado', async () => {
@@ -20,21 +21,29 @@ describe('PdfArtifactService', () => {
         Promise.resolve(Buffer.from(`%PDF ${format}`)),
       ),
     };
+    const brandingLogo = { load: jest.fn().mockResolvedValue(undefined) };
     const service = new PdfArtifactService(
       prisma as unknown as PrismaService,
       storage as unknown as PrivateObjectStorageService,
       renderer as unknown as PdfRendererService,
+      brandingLogo as unknown as BrandingLogoResolverService,
     );
 
     await expect(service.generate('document-1')).resolves.toEqual([
       { type: 'PDF_A4' },
       { type: 'PDF_TICKET' },
     ]);
-    expect(renderer.render).toHaveBeenNthCalledWith(1, expect.anything(), 'A4');
+    expect(renderer.render).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      'A4',
+      undefined,
+    );
     expect(renderer.render).toHaveBeenNthCalledWith(
       2,
       expect.anything(),
       'TICKET',
+      undefined,
     );
     expect(storage.put).toHaveBeenCalledWith(
       expect.stringMatching(/document\.a4\.pdf$/),
@@ -66,6 +75,7 @@ describe('PdfArtifactService', () => {
       prisma as unknown as PrismaService,
       {} as PrivateObjectStorageService,
       renderer as unknown as PdfRendererService,
+      {} as BrandingLogoResolverService,
     );
 
     await expect(service.generate('document-1')).resolves.toEqual(existing);
@@ -89,10 +99,12 @@ describe('PdfArtifactService', () => {
     const renderer = {
       render: jest.fn().mockResolvedValue(Buffer.from('%PDF TICKET')),
     };
+    const brandingLogo = { load: jest.fn().mockResolvedValue(undefined) };
     const service = new PdfArtifactService(
       prisma as unknown as PrismaService,
       storage as unknown as PrivateObjectStorageService,
       renderer as unknown as PdfRendererService,
+      brandingLogo as unknown as BrandingLogoResolverService,
     );
 
     await expect(service.generate('document-1')).resolves.toEqual([
@@ -100,7 +112,11 @@ describe('PdfArtifactService', () => {
       { type: 'PDF_TICKET' },
     ]);
     expect(renderer.render).toHaveBeenCalledTimes(1);
-    expect(renderer.render).toHaveBeenCalledWith(expect.anything(), 'TICKET');
+    expect(renderer.render).toHaveBeenCalledWith(
+      expect.anything(),
+      'TICKET',
+      undefined,
+    );
   });
 
   it('no produce representaciones de un comprobante rechazado', async () => {
@@ -115,6 +131,7 @@ describe('PdfArtifactService', () => {
       prisma as unknown as PrismaService,
       {} as PrivateObjectStorageService,
       {} as PdfRendererService,
+      {} as BrandingLogoResolverService,
     );
 
     await expect(service.generate('document-1')).rejects.toBeInstanceOf(
@@ -128,6 +145,7 @@ function document() {
     status: 'ACCEPTED',
     sunatHash: 'digest',
     respondedAt: new Date(),
+    brandingSnapshot: null,
     lines: [],
     installments: [],
     artifacts: [

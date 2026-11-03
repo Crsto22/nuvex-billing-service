@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { PrismaService } from '../../../../libs/database/src/prisma.service';
 import type { ApplicationPrincipal } from '../auth/auth.types';
 import type { RequestWithId } from '../common/request-id.middleware';
+import { toTenantBrandingSnapshot } from '../branding/tenant-branding.snapshot';
 import {
   CreateDocumentDto,
   CustomerDocumentType,
@@ -91,7 +92,10 @@ export class DocumentsService {
         active: true,
         establishment: { code: dto.establishmentCode, active: true },
       },
-      include: { tenant: true, establishment: true },
+      include: {
+        tenant: { include: { branding: true } },
+        establishment: true,
+      },
     });
     if (!fiscalSeries) {
       throw new BadRequestException(
@@ -134,6 +138,9 @@ export class DocumentsService {
               ubigeo: fiscalSeries.establishment.ubigeo,
               establishmentCode: fiscalSeries.establishment.code,
             },
+            brandingSnapshot: toTenantBrandingSnapshot(
+              fiscalSeries.tenant.branding,
+            ),
             customerSnapshot: dto.customer as unknown as Prisma.InputJsonValue,
             requestPayload: dto as unknown as Prisma.InputJsonValue,
             normalizedPayload: {

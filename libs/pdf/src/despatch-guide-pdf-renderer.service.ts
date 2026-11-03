@@ -5,6 +5,7 @@ import {
   PdfDespatchIssuer,
 } from './despatch-guide-pdf.types';
 import { DespatchGuideQrService } from './despatch-guide-qr.service';
+import type { ResolvedBrandingLogo } from './branding-logo-resolver.service';
 
 const INK = '#151515';
 const MUTED = '#555555';
@@ -16,7 +17,10 @@ const TABLE_HEADER = '#F2F2F2';
 export class DespatchGuidePdfRendererService {
   constructor(private readonly qr: DespatchGuideQrService) {}
 
-  async render(guide: PdfDespatchGuide): Promise<Buffer> {
+  async render(
+    guide: PdfDespatchGuide,
+    logo?: ResolvedBrandingLogo,
+  ): Promise<Buffer> {
     const qr = await this.qr.png(guide);
     const pdf = new PDFDocument({
       size: 'A4',
@@ -27,7 +31,7 @@ export class DespatchGuidePdfRendererService {
     const result = this.collect(pdf);
     const issuer = guide.issuerSnapshot as unknown as PdfDespatchIssuer;
 
-    this.header(pdf, guide, issuer);
+    this.header(pdf, guide, issuer, logo);
     this.transferDetails(pdf, guide);
     let y = this.tableHeader(pdf, 341);
 
@@ -83,15 +87,20 @@ export class DespatchGuidePdfRendererService {
     pdf: PDFKit.PDFDocument,
     guide: PdfDespatchGuide,
     issuer: PdfDespatchIssuer,
+    logo?: ResolvedBrandingLogo,
   ) {
-    pdf
-      .fillColor(INK)
-      .font('Helvetica-Bold')
-      .fontSize(21)
-      .text(issuer.tradeName || issuer.legalName, 42, 54, {
-        width: 275,
-        align: 'center',
-      });
+    if (logo) {
+      this.logo(pdf, logo, 42, 43, 275, 54);
+    } else {
+      pdf
+        .fillColor(INK)
+        .font('Helvetica-Bold')
+        .fontSize(21)
+        .text(issuer.tradeName || issuer.legalName, 42, 54, {
+          width: 275,
+          align: 'center',
+        });
+    }
     pdf.fontSize(8).text(issuer.legalName, 42, 111, { width: 275 });
     pdf
       .font('Helvetica')
@@ -398,5 +407,24 @@ export class DespatchGuidePdfRendererService {
       pdf.on('end', () => resolve(Buffer.concat(chunks)));
       pdf.on('error', reject);
     });
+  }
+
+  private logo(
+    pdf: PDFKit.PDFDocument,
+    logo: ResolvedBrandingLogo,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ) {
+    const scale = Math.min(width / logo.width, height / logo.height, 1);
+    const renderedWidth = logo.width * scale;
+    const renderedHeight = logo.height * scale;
+    pdf.image(
+      logo.body,
+      x + (width - renderedWidth) / 2,
+      y + (height - renderedHeight) / 2,
+      { width: renderedWidth, height: renderedHeight },
+    );
   }
 }
