@@ -6,7 +6,7 @@ x-billing-service: &billing-service
     context: .
     dockerfile: Dockerfile
   env_file:
-    - ${BILLING_ENV_FILE:-.env.production}
+    - ${BILLING_ENV_FILE:-.env}
   environment:
     NODE_ENV: production
     API_HOST: 0.0.0.0

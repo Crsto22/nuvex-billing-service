@@ -42,17 +42,17 @@ El Compose despliega PostgreSQL, ejecuta las migraciones y después inicia la AP
 Guía completa: [`docs/docker-deployment.md`](docs/docker-deployment.md).
 
 ```bash
-cp .env.production.example .env.production
+cp .env.production.example .env
 # Complete todos los valores REPLACE_WITH_...
-docker compose --env-file .env.production up -d --build
+docker compose up -d --build
 docker compose ps
 ```
 
 Con Docker Compose clásico use:
 
 ```bash
-docker-compose --env-file .env.production up -d --build
-docker-compose --env-file .env.production ps
+docker-compose up -d --build
+docker-compose ps
 ```
 
 La API queda disponible únicamente en `127.0.0.1:3100` para conectarla de forma segura a Nginx, Caddy o Traefik y publicar `https://billing-api.nuvex.pe`. PostgreSQL no expone ningún puerto al exterior.

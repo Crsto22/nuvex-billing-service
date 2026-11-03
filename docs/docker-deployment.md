@@ -17,27 +17,27 @@ postgresql://usuario:clave@postgres:5432/nuvex_billing?schema=public
 ## Preparación
 
 ```bash
-cp .env.production.example .env.production
+cp .env.production.example .env
 ```
 
 Complete todos los valores `REPLACE_WITH_...`. La contraseña PostgreSQL debe ser aleatoria y segura para URL, evitando caracteres que requieran codificación como `@`, `/`, `:` o `?`.
 
-El archivo `.env.production` contiene secretos y está excluido de Git.
+El archivo `.env` contiene secretos y está excluido de Git. Docker Compose lo carga automáticamente.
 
 ## Inicio
 
 ```bash
-docker compose --env-file .env.production config
-docker compose --env-file .env.production up -d --build
-docker compose --env-file .env.production ps
+docker compose config
+docker compose up -d --build
+docker compose ps
 ```
 
 En servidores que usan Docker Compose clásico:
 
 ```bash
-docker-compose --env-file .env.production config
-docker-compose --env-file .env.production up -d --build
-docker-compose --env-file .env.production ps
+docker-compose config
+docker-compose up -d --build
+docker-compose ps
 ```
 
 El orden automático es:
@@ -50,7 +50,7 @@ El orden automático es:
 
 ```bash
 curl http://127.0.0.1:3100/v1/health
-docker compose --env-file .env.production logs --tail=100 api worker
+docker compose logs --tail=100 api worker
 ```
 
 La respuesta de salud esperada contiene `"status":"ok"`.
@@ -69,7 +69,7 @@ El proxy debe manejar HTTPS. Mantenga PostgreSQL y el worker sin puertos públic
 
 ```bash
 git pull
-docker compose --env-file .env.production up -d --build
+docker compose up -d --build
 docker image prune -f
 ```
 
