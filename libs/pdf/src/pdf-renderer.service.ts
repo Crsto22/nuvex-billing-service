@@ -326,7 +326,7 @@ export class PdfRendererService {
       document.lines.length * 34 +
       document.installments.length * 12 +
       (this.isNote(document) ? 42 : 0);
-    const height = Math.max(650, Math.min(1600, estimated));
+    const height = Math.max(720, Math.min(1800, estimated));
     const pdf = new PDFDocument({
       size: [226.77, height],
       margins: { top: 18, left: 13, right: 13, bottom: 18 },

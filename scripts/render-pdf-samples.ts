@@ -4,11 +4,13 @@ import { resolve } from 'node:path';
 import { PdfRendererService } from '../libs/pdf/src/pdf-renderer.service';
 import { PdfTaxDocument } from '../libs/pdf/src/pdf.types';
 import { SunatQrService } from '../libs/pdf/src/sunat-qr.service';
+import sharp from 'sharp';
 
 async function main() {
   const output = resolve('output/pdf');
   await mkdir(output, { recursive: true });
   const renderer = new PdfRendererService(new SunatQrService());
+  const logo = await sampleLogo();
   for (const [documentType, format, fileName] of [
     ['INVOICE', 'A4', 'muestra-factura-a4.pdf'],
     ['INVOICE', 'TICKET', 'muestra-factura-ticket.pdf'],
@@ -17,9 +19,34 @@ async function main() {
   ] as const) {
     await writeFile(
       resolve(output, fileName),
-      await renderer.render(fixture(documentType), format),
+      await renderer.render(fixture(documentType), format, logo),
     );
   }
+}
+
+async function sampleLogo() {
+  const body = await sharp({
+    create: {
+      width: 720,
+      height: 240,
+      channels: 4,
+      background: { r: 255, g: 255, b: 255, alpha: 0 },
+    },
+  })
+    .composite([
+      {
+        input: Buffer.from(`
+          <svg width="720" height="240" xmlns="http://www.w3.org/2000/svg">
+            <rect x="16" y="16" width="208" height="208" rx="28" fill="#173F6D"/>
+            <path d="M66 164V76h28l60 55V76h28v88h-27l-61-55v55z" fill="#fff"/>
+            <text x="252" y="145" font-family="Arial, sans-serif" font-size="82" font-weight="700" fill="#173F6D">NUVEX</text>
+            <text x="258" y="188" font-family="Arial, sans-serif" font-size="28" fill="#333">FACTURACION ELECTRONICA</text>
+          </svg>`),
+      },
+    ])
+    .png()
+    .toBuffer();
+  return { body, version: 1, width: 720, height: 240 };
 }
 
 function fixture(documentType: 'INVOICE' | 'RECEIPT') {

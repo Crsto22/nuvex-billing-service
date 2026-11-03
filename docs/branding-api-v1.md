@@ -53,3 +53,13 @@ Antes de renderizar, el generador descarga el logo fijado desde R2 y verifica su
 - Guía de remisión remitente: A4.
 
 Las empresas que no tengan logo configurado continúan usando el nombre comercial o la razón social como encabezado.
+
+## Pruebas visuales
+
+Para generar muestras reproducibles de factura y boleta en A4 y ticket con logo:
+
+```bash
+npm run pdf:samples
+```
+
+Los cuatro PDF se escriben en `output/pdf/`. Deben renderizarse a imagen para revisar proporción del logo, tablas, QR, pie de página y ausencia de texto recortado.
