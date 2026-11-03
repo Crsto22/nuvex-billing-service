@@ -297,6 +297,57 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /admin/tenants/{tenantId}/branding:
+    get:
+      tags: [Administration]
+      operationId: getTenantBranding
+      summary: Consulta el branding de una empresa sin exponer claves privadas
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Estado y metadatos del logo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantBranding'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tenants/{tenantId}/branding/logo:
+    put:
+      tags: [Administration]
+      operationId: uploadTenantLogo
+      summary: Carga, optimiza y versiona el logo de una empresa
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [logo]
+              properties:
+                logo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Logo optimizado y almacenado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantBranding'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /admin/tenants/{tenantId}/sunat-credentials:
     get:
       tags: [Administration]
@@ -1044,6 +1095,75 @@ components:
             $ref: '#/components/schemas/Problem'
 
   schemas:
+    TenantBranding:
+      type: object
+      required: [tenantId, logoConfigured, logo]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        logoConfigured:
+          type: boolean
+        logo:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/TenantLogoMetadata'
+
+    TenantLogoMetadata:
+      type: object
+      required:
+        - version
+        - sourceFileName
+        - sourceMimeType
+        - sourceSizeBytes
+        - sourceWidth
+        - sourceHeight
+        - pdf
+        - preview
+        - uploadedAt
+        - updatedAt
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        sourceFileName:
+          type: string
+        sourceMimeType:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+        sourceSizeBytes:
+          type: integer
+        sourceWidth:
+          type: integer
+        sourceHeight:
+          type: integer
+        pdf:
+          $ref: '#/components/schemas/LogoVariantMetadata'
+        preview:
+          $ref: '#/components/schemas/LogoVariantMetadata'
+        uploadedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    LogoVariantMetadata:
+      type: object
+      required: [mimeType, sizeBytes, width, height, sha256]
+      properties:
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+        width:
+          type: integer
+        height:
+          type: integer
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+
     CreateEstablishment:
       type: object
       required: [code, name, address, ubigeo]

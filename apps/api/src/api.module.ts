@@ -19,6 +19,7 @@ import { WebhooksApiModule } from './webhooks/webhooks-api.module';
 import { NotesModule } from './notes/notes.module';
 import { DespatchGuidesModule } from './despatch-guides/despatch-guides.module';
 import { VoidRequestsModule } from './void-requests/void-requests.module';
+import { BrandingModule } from './branding/branding.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { VoidRequestsModule } from './void-requests/void-requests.module';
     SecurityModule,
     AuthModule,
     TenantsModule,
+    BrandingModule,
     ApplicationsModule,
     SunatCredentialsModule,
     DocumentsModule,

@@ -17,6 +17,7 @@ Fase 14: pruebas integrales del flujo de emision, CDR, PDF y webhooks.
 - Webhooks: [`docs/webhooks-v1.md`](docs/webhooks-v1.md).
 - Pruebas integrales: [`docs/integration-tests.md`](docs/integration-tests.md).
 - Almacenamiento privado independiente: [`docs/private-storage.md`](docs/private-storage.md).
+- Branding y logos por empresa: [`docs/branding-api-v1.md`](docs/branding-api-v1.md).
 
 ## Comandos
 
