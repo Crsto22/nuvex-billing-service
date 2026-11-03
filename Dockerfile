@@ -1,6 +1,9 @@
 FROM node:24-bookworm-slim AS dependencies
 
 WORKDIR /app
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y openssl \
+  && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci
 
