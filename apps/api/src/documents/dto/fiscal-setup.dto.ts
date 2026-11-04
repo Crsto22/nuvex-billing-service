@@ -1,9 +1,11 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsString,
   IsUUID,
+  IsOptional,
   Matches,
   Max,
   MaxLength,
@@ -53,4 +55,23 @@ export class CreateFiscalSeriesDto {
   @Min(0)
   @Max(99_999_999)
   initialNumber = 0;
+}
+
+export class UpdateFiscalSeriesAssignmentDto {
+  @IsUUID()
+  applicationId!: string;
+
+  @IsUUID()
+  establishmentId!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(99_999_999)
+  minimumNumber?: number;
 }

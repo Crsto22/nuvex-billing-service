@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   ParseUUIDPipe,
   Post,
   Req,
@@ -12,6 +13,7 @@ import type { RequestWithId } from '../common/request-id.middleware';
 import {
   CreateEstablishmentDto,
   CreateFiscalSeriesDto,
+  UpdateFiscalSeriesAssignmentDto,
 } from './dto/fiscal-setup.dto';
 import { DocumentsService } from './documents.service';
 
@@ -46,5 +48,20 @@ export class FiscalSetupController {
     @Req() request: RequestWithId,
   ) {
     return this.documents.createFiscalSeries(tenantId, dto, request);
+  }
+
+  @Patch('fiscal-series/:seriesId')
+  updateFiscalSeriesAssignment(
+    @Param('tenantId', ParseUUIDPipe) tenantId: string,
+    @Param('seriesId', ParseUUIDPipe) seriesId: string,
+    @Body() dto: UpdateFiscalSeriesAssignmentDto,
+    @Req() request: RequestWithId,
+  ) {
+    return this.documents.updateFiscalSeriesAssignment(
+      tenantId,
+      seriesId,
+      dto,
+      request,
+    );
   }
 }

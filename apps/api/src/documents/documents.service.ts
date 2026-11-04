@@ -18,6 +18,7 @@ import {
 import {
   CreateEstablishmentDto,
   CreateFiscalSeriesDto,
+  UpdateFiscalSeriesAssignmentDto,
 } from './dto/fiscal-setup.dto';
 import { Calculation, TaxCalculatorService } from './tax-calculator.service';
 
@@ -501,6 +502,54 @@ export class DocumentsService {
         { documentType: 'asc' },
         { series: 'asc' },
       ],
+    });
+  }
+
+  async updateFiscalSeriesAssignment(
+    tenantId: string,
+    seriesId: string,
+    dto: UpdateFiscalSeriesAssignmentDto,
+    request: RequestWithId,
+  ) {
+    const [series, application, establishment] = await Promise.all([
+      this.prisma.fiscalSeries.findFirst({
+        where: { id: seriesId, tenantId },
+      }),
+      this.prisma.application.findFirst({
+        where: { id: dto.applicationId, tenantId },
+      }),
+      this.prisma.establishment.findFirst({
+        where: { id: dto.establishmentId, tenantId },
+      }),
+    ]);
+    if (!series) throw new NotFoundException('Serie fiscal no encontrada');
+    if (!application || !establishment) {
+      throw new BadRequestException(
+        'Aplicacion o establecimiento no pertenece a la empresa',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.fiscalSeries.update({
+        where: { id: series.id },
+        data: {
+          applicationId: application.id,
+          establishmentId: establishment.id,
+          ...(dto.active !== undefined ? { active: dto.active } : {}),
+          ...(dto.minimumNumber !== undefined &&
+          dto.minimumNumber > series.currentNumber
+            ? { currentNumber: dto.minimumNumber }
+            : {}),
+        },
+      });
+      await this.adminAudit(
+        tx,
+        tenantId,
+        series.id,
+        'fiscal_series.assignment_updated',
+        request,
+      );
+      return updated;
     });
   }
 
