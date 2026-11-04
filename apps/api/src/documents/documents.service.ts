@@ -57,7 +57,7 @@ export class DocumentsService {
     if (replay) return replay;
 
     const calculation = this.calculator.calculate(dto);
-    this.validateCustomer(dto);
+    this.validateCustomer(dto, calculation.total);
     this.calculator.assertExpectedTotals(dto.expectedTotals, calculation);
     this.validatePayment(dto, calculation);
     this.validateMetadata(dto.metadata);
@@ -129,6 +129,10 @@ export class DocumentsService {
             issueTime: dto.issueTime,
             currency: dto.currency,
             paymentMethod: dto.paymentTerms.method,
+            amountDue:
+              dto.paymentTerms.method === PaymentMethod.CREDIT
+                ? new Prisma.Decimal(dto.paymentTerms.amountDue ?? '0')
+                : null,
             calculationVersion: calculation.calculationVersion,
             issuerSnapshot: {
               ruc: fiscalSeries.tenant.ruc,
@@ -525,7 +529,7 @@ export class DocumentsService {
     }
   }
 
-  private validateCustomer(dto: CreateDocumentDto) {
+  private validateCustomer(dto: CreateDocumentDto, total: Prisma.Decimal) {
     const number = dto.customer.documentNumber?.trim();
     if (dto.customer.documentType === CustomerDocumentType.NONE && number) {
       throw new BadRequestException(
@@ -557,6 +561,17 @@ export class DocumentsService {
         'Una factura v1 requiere un cliente con RUC',
       );
     }
+    if (
+      dto.documentType === 'RECEIPT' &&
+      total.gt(700) &&
+      ![CustomerDocumentType.DNI, CustomerDocumentType.RUC].includes(
+        dto.customer.documentType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Una boleta mayor a S/700 requiere DNI o RUC en esta version',
+      );
+    }
   }
 
   private validatePayment(dto: CreateDocumentDto, calculation: Calculation) {
@@ -580,9 +595,15 @@ export class DocumentsService {
         (total, item) => total.plus(item.amount),
         new Prisma.Decimal(0),
       );
-      if (!sum.eq(calculation.total)) {
+      const amountDue = new Prisma.Decimal(dto.paymentTerms.amountDue ?? '0');
+      if (amountDue.lte(0) || amountDue.gt(calculation.total)) {
         throw new BadRequestException(
-          'La suma de cuotas debe coincidir con el total',
+          'El saldo pendiente debe ser mayor a cero y no superar el total',
+        );
+      }
+      if (!sum.eq(amountDue)) {
+        throw new BadRequestException(
+          'La suma de cuotas debe coincidir con el saldo pendiente',
         );
       }
       const issueDate = dateOnly(dto.issueDate);
@@ -652,6 +673,7 @@ export class DocumentsService {
       currency: document.currency,
       issueDate: document.issueDate.toISOString().slice(0, 10),
       paymentMethod: document.paymentMethod,
+      amountDue: document.amountDue?.toFixed(2) ?? null,
       calculationVersion: document.calculationVersion,
       customer: document.customerSnapshot,
       reason: document.reasonCode

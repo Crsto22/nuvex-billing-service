@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DocumentType, Environment, PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../../../../libs/database/src/prisma.service';
 import type { ApplicationPrincipal } from '../auth/auth.types';
@@ -68,5 +68,50 @@ describe('DocumentsService', () => {
     await expect(
       service.create(dto, 'idempotency-key-0002', principal, request),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('validates credit installments against the pending balance', () => {
+    const calculator = new TaxCalculatorService();
+    const service = new DocumentsService({} as PrismaService, calculator) as unknown as {
+      validatePayment: (
+        input: typeof dto & {
+          paymentTerms: {
+            method: PaymentMethod;
+            amountDue: string;
+            installments: Array<{ number: number; amount: string; dueDate: string }>;
+          };
+        },
+        calculation: ReturnType<TaxCalculatorService['calculate']>,
+      ) => void;
+    };
+    const creditDto = {
+      ...dto,
+      paymentTerms: {
+        method: PaymentMethod.CREDIT,
+        amountDue: '60.00',
+        installments: [
+          { number: 1, amount: '60.00', dueDate: '2026-12-01' },
+        ],
+      },
+    };
+
+    expect(() =>
+      service.validatePayment(creditDto, calculator.calculate(creditDto)),
+    ).not.toThrow();
+
+    expect(() =>
+      service.validatePayment(
+        {
+          ...creditDto,
+          paymentTerms: {
+            ...creditDto.paymentTerms,
+            installments: [
+              { number: 1, amount: '59.00', dueDate: '2026-12-01' },
+            ],
+          },
+        },
+        calculator.calculate(creditDto),
+      ),
+    ).toThrow(BadRequestException);
   });
 });

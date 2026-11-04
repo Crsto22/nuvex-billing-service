@@ -156,7 +156,12 @@ export class UblInvoiceBuilderService {
       .txt(document.paymentMethod === 'CREDIT' ? 'Credito' : 'Contado');
     if (document.paymentMethod !== 'CREDIT') return;
 
-    this.currency(terms, 'cbc:Amount', document.totalAmount, document.currency);
+    this.currency(
+      terms,
+      'cbc:Amount',
+      document.amountDue ?? document.totalAmount,
+      document.currency,
+    );
     [...document.installments]
       .sort((left, right) => left.number - right.number)
       .forEach((installment) => {

@@ -73,6 +73,10 @@ export class PaymentTermsDto {
   method!: PaymentMethod;
 
   @IsOptional()
+  @Matches(/^\d+(\.\d{1,2})?$/)
+  amountDue?: string;
+
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })

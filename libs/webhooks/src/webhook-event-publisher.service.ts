@@ -52,12 +52,14 @@ export class WebhookEventPublisherService {
       data: {
         document: {
           id: document.id,
+          applicationId: document.applicationId,
           externalId: document.externalId,
           environment: document.environment,
           documentType: document.documentType,
           status: document.status,
           series: document.series,
           number: document.number,
+          fullNumber: `${document.series}-${String(document.number).padStart(8, '0')}`,
           currency: document.currency,
           total: document.totalAmount.toFixed(2),
           note: ['CREDIT_NOTE', 'DEBIT_NOTE'].includes(document.documentType)

@@ -298,6 +298,7 @@ model TaxDocument {
   issueTime          String?                @map("issue_time") @db.VarChar(8)
   currency           String                 @db.Char(3)
   paymentMethod      PaymentMethod          @map("payment_method")
+  amountDue          Decimal?               @map("amount_due") @db.Decimal(18, 2)
   calculationVersion String                 @map("calculation_version") @db.VarChar(40)
   issuerSnapshot     Json                   @map("issuer_snapshot")
   brandingSnapshot   Json?                  @map("branding_snapshot")
@@ -335,7 +336,7 @@ model TaxDocument {
   noteAdjustments    TaxNoteAdjustment[]
   voidRequest        SunatVoidRequest?
 
-  @@unique([applicationId, externalId])
+  @@unique([applicationId, environment, externalId])
   @@unique([tenantId, environment, documentType, series, number])
   @@index([applicationId, createdAt])
   @@index([tenantId, status, createdAt])
