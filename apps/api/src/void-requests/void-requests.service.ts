@@ -199,7 +199,8 @@ export class VoidRequestsService {
       document.references[0]?.referencedType,
     );
     if (
-      procedure === SunatVoidProcedure.VOIDED_DOCUMENTS &&
+      (procedure === SunatVoidProcedure.VOIDED_DOCUMENTS ||
+        procedure === SunatVoidProcedure.DAILY_SUMMARY) &&
       document.respondedAt &&
       daysBetweenUtc(document.respondedAt, new Date()) > 7
     ) {

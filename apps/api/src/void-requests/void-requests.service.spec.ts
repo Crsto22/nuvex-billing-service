@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import {
   DocumentStatus,
   DocumentType,
@@ -64,6 +65,27 @@ describe('VoidRequestsService', () => {
     );
 
     expect(result.procedure).toBe(SunatVoidProcedure.DAILY_SUMMARY);
+  });
+
+  it('rechaza la baja de una boleta aceptada hace mas de siete dias', async () => {
+    const document = taxDocument(DocumentType.RECEIPT);
+    document.respondedAt = new Date(Date.now() - 8 * 86_400_000);
+    const { prisma } = prismaMock(document);
+    const service = new VoidRequestsService(
+      prisma as unknown as PrismaService,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      service.createForDocument(
+        document.id,
+        { reason: 'Boleta no otorgada', documentDelivered: false },
+        'void-old-receipt-0001',
+        principal,
+        httpRequest,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it.each([DocumentType.CREDIT_NOTE, DocumentType.DEBIT_NOTE])(
