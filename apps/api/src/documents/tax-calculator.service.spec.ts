@@ -110,6 +110,30 @@ describe('TaxCalculatorService', () => {
     ).toBe(true);
   });
 
+  it('preserves tax-inclusive line totals after monetary rounding', () => {
+    const result = calculator.toResponse(
+      calculator.calculate({
+        documentType: DocumentType.RECEIPT,
+        currency: 'PEN',
+        lines: [
+          line('shirt', '1', '45.00', true, '10'),
+          line('jacket', '1', '50.00', true, '10'),
+        ],
+      }),
+    );
+
+    expect(result).toMatchObject({
+      taxable: '80.51',
+      tax: '14.49',
+      total: '95.00',
+    });
+    expect(result.lines[0]).toMatchObject({
+      lineValue: '38.14',
+      tax: '6.86',
+      total: '45.00',
+    });
+  });
+
   it('validates expected totals inside the tax engine', () => {
     const value = calculator.calculate({
       documentType: DocumentType.RECEIPT,

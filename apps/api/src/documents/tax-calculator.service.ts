@@ -185,8 +185,14 @@ export class TaxCalculatorService {
         `El descuento excede la lÃ­nea ${input.externalId}`,
       );
     }
+    // Cuando el precio ya incluye IGV, el total cobrado es la fuente de
+    // verdad. Calcular nuevamente 18% sobre una base redondeada puede sumar
+    // un centimo (por ejemplo S/45 => 38.14 + 6.87). Sin descuentos, el IGV
+    // debe ser el residuo exacto entre el total de linea y su base: 6.86.
     const taxAmount = affectation.appliesIgv
-      ? money(lineValue.mul(rate))
+      ? input.unitPriceIncludesTax && lineDiscount.eq(0)
+        ? money(money(unitPrice.mul(quantity)).minus(lineValue))
+        : money(lineValue.mul(rate))
       : ZERO;
     return {
       input,
