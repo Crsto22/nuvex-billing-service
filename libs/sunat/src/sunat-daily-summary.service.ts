@@ -476,7 +476,7 @@ export class SunatDailySummaryService {
         select: { summaryId: true },
       });
       if (existing) return existing.summaryId;
-      const generationDate = dateOnly(new Date());
+      const generationDate = limaDateOnly(new Date());
       const latest = await tx.dailySummary.findFirst({
         where: { tenantId, environment, generationDate },
         orderBy: { sequence: 'desc' },
@@ -551,7 +551,7 @@ export class SunatDailySummaryService {
         },
       });
       if (alreadyCreated) return alreadyCreated.summary;
-      const generationDate = dateOnly(new Date());
+      const generationDate = limaDateOnly(new Date());
       const latest = await tx.dailySummary.findFirst({
         where: {
           tenantId: document.tenantId,
@@ -783,6 +783,12 @@ export class SunatSummaryProcessingException extends ServiceUnavailableException
   }
 }
 
-function dateOnly(value: Date) {
-  return new Date(`${value.toISOString().slice(0, 10)}T00:00:00.000Z`);
+export function limaDateOnly(value: Date) {
+  const date = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(value);
+  return new Date(`${date}T00:00:00.000Z`);
 }

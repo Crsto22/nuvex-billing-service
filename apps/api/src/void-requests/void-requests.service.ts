@@ -13,7 +13,10 @@ import {
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../../../libs/database/src/prisma.service';
-import { SunatDailySummaryService } from '../../../../libs/sunat/src/sunat-daily-summary.service';
+import {
+  SunatDailySummaryService,
+  limaDateOnly,
+} from '../../../../libs/sunat/src/sunat-daily-summary.service';
 import { WebhookEventPublisherService } from '../../../../libs/webhooks/src/webhook-event-publisher.service';
 import type { ApplicationPrincipal } from '../auth/auth.types';
 import type { RequestWithId } from '../common/request-id.middleware';
@@ -494,10 +497,48 @@ export class VoidRequestsService {
       if (!current) {
         throw new NotFoundException('Solicitud de baja no encontrada');
       }
-      if (current.status !== SunatVoidRequestStatus.FAILED) {
+      const recoverableDateRejection = isRecoverableDateRejection(current);
+      if (
+        current.status !== SunatVoidRequestStatus.FAILED &&
+        !recoverableDateRejection
+      ) {
         throw new ConflictException(
-          'Solo una solicitud de baja fallida puede reintentarse',
+          'Solo una solicitud fallida o rechazada por fecha UTC puede reintentarse',
         );
+      }
+      if (recoverableDateRejection && current.summaryItem) {
+        const generationDate = limaDateOnly(new Date());
+        const latest = await tx.dailySummary.findFirst({
+          where: {
+            tenantId: current.tenantId,
+            environment: current.environment,
+            generationDate,
+            id: { not: current.summaryItem.summary.id },
+          },
+          orderBy: { sequence: 'desc' },
+          select: { sequence: true },
+        });
+        await tx.dailySummary.update({
+          where: { id: current.summaryItem.summary.id },
+          data: {
+            generationDate,
+            sequence: (latest?.sequence ?? 0) + 1,
+            status: 'BUILDING',
+            fileName: null,
+            xmlObjectKey: null,
+            zipObjectKey: null,
+            cdrObjectKey: null,
+            ticket: null,
+            sunatCode: null,
+            sunatMessage: null,
+            submittedAt: null,
+            respondedAt: null,
+          },
+        });
+        await tx.dailySummaryItem.update({
+          where: { voidRequestId: current.id },
+          data: { status: 'PENDING', sunatCode: null, sunatMessage: null },
+        });
       }
       const updated = await tx.sunatVoidRequest.update({
         where: { id: requestId },
@@ -507,6 +548,7 @@ export class VoidRequestsService {
           sunatMessage: null,
           respondedAt: null,
           completedAt: null,
+          ticket: null,
           job: {
             upsert: {
               create: {},
@@ -719,6 +761,12 @@ function validateIdempotencyKey(value: string) {
       'Idempotency-Key debe tener entre 16 y 100 caracteres sin espacios',
     );
   }
+}
+
+function isRecoverableDateRejection(request: StoredVoidRequest) {
+  if (request.status !== SunatVoidRequestStatus.REJECTED) return false;
+  const detail = `${request.sunatCode ?? ''} ${request.sunatMessage ?? ''}`;
+  return /\b2336\b|IssueDate|fecha de recepci[oó]n/i.test(detail);
 }
 
 function hashCanonical(value: unknown) {

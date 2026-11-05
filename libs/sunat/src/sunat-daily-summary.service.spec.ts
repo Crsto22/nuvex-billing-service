@@ -8,10 +8,17 @@ import { SunatCdrParserService } from './sunat-cdr-parser.service';
 import {
   SunatDailySummaryService,
   SunatSummaryProcessingException,
+  limaDateOnly,
 } from './sunat-daily-summary.service';
 import { SunatSoapClientService } from './sunat-soap-client.service';
 
 describe('SunatDailySummaryService', () => {
+  it('usa la fecha calendario de Peru durante el cambio de dia UTC', () => {
+    expect(limaDateOnly(new Date('2026-11-05T00:53:00.000Z'))).toEqual(
+      new Date('2026-11-04T00:00:00.000Z'),
+    );
+  });
+
   it('conserva el ticket y reintenta cuando SUNAT responde 98', async () => {
     const summary = fixture();
     const prisma = {
