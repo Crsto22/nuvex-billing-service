@@ -42,6 +42,27 @@ describe('UblDailySummaryBuilderService', () => {
         (_, index) => ids.item(index)?.textContent,
       ),
     ).toContain('B001-42');
+    const line = document.getElementsByTagNameNS(
+      '*',
+      'SummaryDocumentsLine',
+    )[0];
+    const children = Array.from(
+      { length: line?.childNodes.length ?? 0 },
+      (_, index) => line?.childNodes.item(index),
+    )
+      .filter((node): node is Element => node?.nodeType === 1)
+      .map((node) => node.localName);
+    expect(children).toEqual([
+      'LineID',
+      'DocumentTypeCode',
+      'ID',
+      'AccountingCustomerParty',
+      'BillingReference',
+      'Status',
+      'TotalAmount',
+      'BillingPayment',
+      'TaxTotal',
+    ]);
   });
 
   it.each([

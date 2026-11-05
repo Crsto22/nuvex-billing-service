@@ -49,7 +49,7 @@ export class SunatSoapClientService {
     const xml = await this.readLimited(response);
     const fault = this.fault(xml);
     if (fault) {
-      if (this.isRetryableFault(fault.code)) {
+      if (this.isRetryableFault(fault.code, fault.message)) {
         throw new SunatTransportException(fault.code, fault.message);
       }
       throw new SunatSoapFaultException(fault.code, fault.message);
@@ -183,7 +183,7 @@ export class SunatSoapClientService {
   private assertSoapResponse(response: Response, xml: string) {
     const fault = this.fault(xml);
     if (fault) {
-      if (this.isRetryableFault(fault.code)) {
+      if (this.isRetryableFault(fault.code, fault.message)) {
         throw new SunatTransportException(fault.code, fault.message);
       }
       throw new SunatSoapFaultException(fault.code, fault.message);
@@ -288,7 +288,10 @@ export class SunatSoapClientService {
     );
   }
 
-  private isRetryableFault(code: string) {
+  private isRetryableFault(code: string, message: string) {
+    if (/no se puede leer.*archivo xml|cvc-|schema|saxparse/i.test(message)) {
+      return false;
+    }
     if (/Server/i.test(code)) return true;
     const numeric = Number(code.match(/(\d{3,4})$/)?.[1]);
     return Number.isInteger(numeric) && numeric >= 100 && numeric <= 999;

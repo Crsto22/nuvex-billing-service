@@ -100,6 +100,20 @@ describe('SunatSoapClientService', () => {
     ).rejects.toBeInstanceOf(SunatSoapFaultException);
   });
 
+  it('clasifica un XML invalido como permanente aunque SUNAT use Server', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        soapResponse(
+          '<soap-env:Fault><faultcode>soap-env:Server</faultcode><faultstring>No se puede leer (parsear) el archivo XML - cvc-particle 2.1</faultstring></soap-env:Fault>',
+          500,
+        ),
+      );
+    await expect(
+      new SunatSoapClientService(config).sendSummary(input()),
+    ).rejects.toBeInstanceOf(SunatSoapFaultException);
+  });
+
   it('envia el Resumen Diario y obtiene el ticket', async () => {
     global.fetch = jest
       .fn()

@@ -49,7 +49,12 @@ export class SunatDailySummaryService {
       : `${issuer.ruc}${credentials.solUser}`;
 
     if (!summary.ticket) {
-      summary = await this.generate(summary.id, credentials);
+      summary = await this.generate(
+        summary.id,
+        credentials,
+        SunatVoidProcedure.DAILY_SUMMARY,
+        { refresh: Boolean(summary.zipObjectKey) },
+      );
       const zip = await this.storage.get(summary.zipObjectKey!);
       const sent = await this.soap.sendSummary({
         environment: summary.environment,
@@ -625,6 +630,7 @@ export class SunatDailySummaryService {
       certificatePassword: string;
     },
     procedure: SunatVoidProcedure = SunatVoidProcedure.DAILY_SUMMARY,
+    options: { refresh?: boolean } = {},
   ) {
     const summary = await this.prisma.dailySummary.findUnique({
       where: { id: summaryId },
@@ -639,7 +645,9 @@ export class SunatDailySummaryService {
       },
     });
     if (!summary) throw new NotFoundException('Resumen Diario no encontrado');
-    if (summary.zipObjectKey && summary.fileName) return summary;
+    if (!options.refresh && summary.zipObjectKey && summary.fileName) {
+      return summary;
+    }
     const isVoidedDocuments = procedure === SunatVoidProcedure.VOIDED_DOCUMENTS;
     const unsigned = isVoidedDocuments
       ? this.voidedBuilder.build(summary)

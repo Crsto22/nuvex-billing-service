@@ -126,6 +126,15 @@ export class UblDailySummaryBuilderService {
       .ele('cbc:DocumentTypeCode')
       .txt(this.documentCode(document.documentType));
     node.ele('cbc:ID').txt(`${document.series}-${document.number}`);
+    if (customer.documentNumber) {
+      node
+        .ele('cac:AccountingCustomerParty')
+        .ele('cbc:CustomerAssignedAccountID')
+        .txt(customer.documentNumber)
+        .up()
+        .ele('cbc:AdditionalAccountID')
+        .txt(this.customerCode(customer.documentType));
+    }
     if (
       ['CREDIT_NOTE', 'DEBIT_NOTE'].includes(document.documentType) &&
       document.references[0]
@@ -140,15 +149,6 @@ export class UblDailySummaryBuilderService {
       invoiceReference
         .ele('cbc:DocumentTypeCode')
         .txt(reference.referencedType === 'INVOICE' ? '01' : '03');
-    }
-    if (customer.documentNumber) {
-      node
-        .ele('cac:AccountingCustomerParty')
-        .ele('cbc:CustomerAssignedAccountID')
-        .txt(customer.documentNumber)
-        .up()
-        .ele('cbc:AdditionalAccountID')
-        .txt(this.customerCode(customer.documentType));
     }
     node.ele('cac:Status').ele('cbc:ConditionCode').txt(item.conditionCode);
     this.money(
