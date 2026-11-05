@@ -1,4 +1,3 @@
-import { ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../database/src/prisma.service';
 import { PrivateObjectStorageService } from '../../storage/src/private-object-storage.service';
 import { PdfArtifactService } from './pdf-artifact.service';
@@ -65,9 +64,10 @@ describe('PdfArtifactService', () => {
     ];
     const prisma = {
       taxDocument: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({ ...document(), artifacts: existing }),
+        findUnique: jest.fn().mockResolvedValue({
+          ...document(),
+          artifacts: [document().artifacts[0], ...existing],
+        }),
       },
     };
     const renderer = { render: jest.fn() };
@@ -119,24 +119,68 @@ describe('PdfArtifactService', () => {
     );
   });
 
-  it('no produce representaciones de un comprobante rechazado', async () => {
+  it('genera representaciones mientras el comprobante esta en proceso', async () => {
     const prisma = {
       taxDocument: {
         findUnique: jest
           .fn()
-          .mockResolvedValue({ ...document(), status: 'REJECTED' }),
+          .mockResolvedValue({ ...document(), status: 'PROCESSING' }),
+      },
+      artifact: {
+        upsert: jest.fn(({ create }: { create: { type: string } }) =>
+          Promise.resolve({ type: create.type }),
+        ),
       },
     };
+    const storage = { put: jest.fn().mockResolvedValue(undefined) };
+    const renderer = {
+      render: jest.fn().mockResolvedValue(Buffer.from('%PDF provisional')),
+    };
+    const brandingLogo = { load: jest.fn().mockResolvedValue(undefined) };
     const service = new PdfArtifactService(
       prisma as unknown as PrismaService,
-      {} as PrivateObjectStorageService,
-      {} as PdfRendererService,
-      {} as BrandingLogoResolverService,
+      storage as unknown as PrivateObjectStorageService,
+      renderer as unknown as PdfRendererService,
+      brandingLogo as unknown as BrandingLogoResolverService,
     );
 
-    await expect(service.generate('document-1')).rejects.toBeInstanceOf(
-      ConflictException,
+    await expect(service.generate('document-1')).resolves.toHaveLength(2);
+    expect(renderer.render).toHaveBeenCalledTimes(2);
+  });
+
+  it('regenera ambos formatos al finalizar la respuesta SUNAT', async () => {
+    const existing = [
+      { type: 'PDF_A4', fileName: 'document.a4.pdf' },
+      { type: 'PDF_TICKET', fileName: 'document.ticket.pdf' },
+    ];
+    const prisma = {
+      taxDocument: {
+        findUnique: jest.fn().mockResolvedValue({
+          ...document(),
+          artifacts: [document().artifacts[0], ...existing],
+        }),
+      },
+      artifact: {
+        upsert: jest.fn().mockResolvedValue({ type: 'PDF' }),
+      },
+    };
+    const storage = { put: jest.fn().mockResolvedValue(undefined) };
+    const renderer = {
+      render: jest.fn().mockResolvedValue(Buffer.from('%PDF final')),
+    };
+    const brandingLogo = { load: jest.fn().mockResolvedValue(undefined) };
+    const service = new PdfArtifactService(
+      prisma as unknown as PrismaService,
+      storage as unknown as PrivateObjectStorageService,
+      renderer as unknown as PdfRendererService,
+      brandingLogo as unknown as BrandingLogoResolverService,
     );
+
+    await expect(
+      service.generate('document-1', { refresh: true }),
+    ).resolves.toHaveLength(2);
+    expect(renderer.render).toHaveBeenCalledTimes(2);
+    expect(storage.put).toHaveBeenCalledTimes(2);
   });
 });
 

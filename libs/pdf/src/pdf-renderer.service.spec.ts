@@ -9,6 +9,55 @@ import { resolve } from 'node:path';
 describe('PdfRendererService', () => {
   const renderer = new PdfRendererService(new SunatQrService());
 
+  it('no presenta un documento en proceso como aceptado', () => {
+    const document = { ...fixture('RECEIPT'), status: 'PROCESSING' };
+    expect(
+      (
+        renderer as unknown as {
+          status: (value: PdfTaxDocument) => string | null;
+        }
+      ).status(document),
+    ).toBeNull();
+  });
+
+  it('identifica un documento rechazado', () => {
+    const document = { ...fixture('INVOICE'), status: 'REJECTED' };
+    expect(
+      (
+        renderer as unknown as {
+          status: (value: PdfTaxDocument) => string | null;
+        }
+      ).status(document),
+    ).toBe('RECHAZADO');
+  });
+
+  it.each([
+    ['PROCESSING', 'receipt-processing-production.pdf'],
+    ['REJECTED', 'receipt-rejected-production.pdf'],
+  ] as const)(
+    'genera ticket de producción con estado %s',
+    async (status, fileName) => {
+      const document = {
+        ...fixture('RECEIPT'),
+        environment: 'PRODUCTION',
+        status,
+        sunatCode: status === 'REJECTED' ? '1234' : null,
+        sunatMessage:
+          status === 'REJECTED' ? 'El comprobante fue rechazado' : null,
+        respondedAt: status === 'REJECTED' ? new Date() : null,
+      } as PdfTaxDocument;
+      const result = await renderer.render(
+        document,
+        'TICKET',
+        await testLogo(),
+      );
+
+      expect(result.subarray(0, 5).toString()).toBe('%PDF-');
+      await saveVisual(fileName, result);
+    },
+    20_000,
+  );
+
   it.each([
     ['INVOICE', 'A4'],
     ['INVOICE', 'TICKET'],
@@ -68,6 +117,7 @@ function fixture(
   const isNote = ['CREDIT_NOTE', 'DEBIT_NOTE'].includes(documentType);
   return {
     documentType,
+    environment: 'BETA',
     series: isInvoice
       ? 'F001'
       : documentType === 'RECEIPT'

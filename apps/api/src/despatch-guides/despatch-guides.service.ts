@@ -42,6 +42,7 @@ const GUIDE_INCLUDE = {
     orderBy: [{ primary: 'desc' }, { documentNumber: 'asc' }],
   },
   items: { orderBy: { lineNumber: 'asc' } },
+  relatedDocuments: { orderBy: { createdAt: 'asc' } },
   artifacts: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.DespatchGuideInclude;
 
@@ -148,6 +149,7 @@ export class DespatchGuidesService {
             where: { id: series.id },
             data: { currentNumber: { increment: 1 } },
           });
+          const relatedDocuments = this.relatedDocuments(dto);
           const guide = await tx.despatchGuide.create({
             data: {
               tenantId: principal.tenantId,
@@ -174,8 +176,8 @@ export class DespatchGuidesService {
               departureAddress: dto.departure.address.trim(),
               arrivalUbigeo: dto.arrival?.ubigeo,
               arrivalAddress: dto.arrival?.address.trim(),
-              relatedDocumentType: dto.relatedDocument?.documentType,
-              relatedDocumentNumber: clean(dto.relatedDocument?.number),
+              relatedDocumentType: relatedDocuments[0]?.documentType,
+              relatedDocumentNumber: clean(relatedDocuments[0]?.number),
               issuerSnapshot: {
                 ruc: series.tenant.ruc,
                 legalName: series.tenant.legalName,
@@ -235,6 +237,12 @@ export class DespatchGuidesService {
                   description: item.description.trim(),
                   quantity: new Prisma.Decimal(item.quantity),
                   unitCode: normalize(item.unitCode),
+                })),
+              },
+              relatedDocuments: {
+                create: relatedDocuments.map((document) => ({
+                  documentType: document.documentType,
+                  number: document.number,
                 })),
               },
             },
@@ -307,6 +315,65 @@ export class DespatchGuidesService {
     });
     if (!guide) throw new NotFoundException('Guía de remisión no encontrada');
     return this.toResponse(guide);
+  }
+
+  async submit(
+    id: string,
+    idempotencyKey: string,
+    principal: ApplicationPrincipal,
+    request: RequestWithId,
+  ) {
+    validateIdempotencyKey(idempotencyKey);
+    return this.prisma.$transaction(async (tx) => {
+      const guide = await tx.despatchGuide.findFirst({
+        where: {
+          id,
+          tenantId: principal.tenantId,
+          applicationId: principal.applicationId,
+          environment: principal.environment,
+        },
+        include: GUIDE_INCLUDE,
+      });
+      if (!guide) throw new NotFoundException('Guía de remisión no encontrada');
+      if (
+        ['ACCEPTED', 'ACCEPTED_WITH_OBSERVATIONS', 'VALIDATED_BETA'].includes(
+          guide.status,
+        )
+      ) {
+        return this.toResponse(guide);
+      }
+      if (['CANCELLED', 'CANCELLATION_REQUESTED'].includes(guide.status)) {
+        throw new ConflictException('No se puede enviar una guía anulada');
+      }
+      await tx.despatchGuideEmissionJob.upsert({
+        where: { guideId: guide.id },
+        create: { guideId: guide.id },
+        update: {
+          status: 'PENDING',
+          nextAttemptAt: new Date(),
+          lockedAt: null,
+          lockedBy: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          processedAt: null,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          tenantId: guide.tenantId,
+          applicationId: guide.applicationId,
+          actorType: 'API_KEY',
+          actorId: principal.apiKeyId,
+          action: 'despatch_guide.submission_queued',
+          resourceType: 'despatch_guide',
+          resourceId: guide.id,
+          requestId: request.requestId,
+          ip: request.ip,
+          data: { idempotencyKey },
+        },
+      });
+      return this.toResponse(guide);
+    });
   }
 
   async list(
@@ -682,14 +749,21 @@ export class DespatchGuidesService {
   }
 
   private validateRelatedDocument(dto: CreateDespatchGuideDto) {
-    const related = dto.relatedDocument;
+    const documents = this.relatedDocuments(dto);
     const reason = dto.transferReasonCode;
-    if (['08', '09', '19'].includes(reason) && !related) {
+    if (['08', '09', '19'].includes(reason) && documents.length === 0) {
       throw new BadRequestException(
         'El motivo seleccionado requiere un documento aduanero relacionado',
       );
     }
-    if (!related) return;
+    for (const related of documents)
+      this.validateRelatedDocumentItem(related, reason);
+  }
+
+  private validateRelatedDocumentItem(
+    related: { documentType: string; number: string },
+    reason: string,
+  ) {
     if (!SUNAT_REMITTENT_DOCUMENT_TYPES.has(related.documentType)) {
       throw new BadRequestException(
         'El tipo de documento no pertenece al Catálogo SUNAT 61 para GRE remitente',
@@ -740,6 +814,23 @@ export class DespatchGuidesService {
         'Los documentos 91 y 92 solo corresponden a mercancía extranjera',
       );
     }
+  }
+
+  private relatedDocuments(dto: CreateDespatchGuideDto) {
+    const source = dto.relatedDocuments?.length
+      ? dto.relatedDocuments
+      : dto.relatedDocument
+        ? [dto.relatedDocument]
+        : [];
+    const unique = new Map<string, { documentType: string; number: string }>();
+    for (const document of source) {
+      const normalized = {
+        documentType: document.documentType.trim(),
+        number: document.number.trim(),
+      };
+      unique.set(`${normalized.documentType}:${normalized.number}`, normalized);
+    }
+    return [...unique.values()];
   }
 
   private assertOnePrimary(items: Array<{ primary: boolean }>, label: string) {
@@ -857,14 +948,20 @@ export class DespatchGuidesService {
         unitCode: item.unitCode,
       })),
       relatedDocument:
-        guide.relatedDocumentType && guide.relatedDocumentNumber
+        guide.relatedDocuments?.[0] ??
+        (guide.relatedDocumentType && guide.relatedDocumentNumber
           ? {
               documentType: guide.relatedDocumentType,
               number: guide.relatedDocumentNumber,
             }
-          : null,
+          : null),
+      relatedDocuments: (guide.relatedDocuments ?? []).map((document) => ({
+        documentType: document.documentType,
+        number: document.number,
+      })),
       artifacts: guide.artifacts.map(artifactResponse),
       sunatHash: guide.sunatHash,
+      sunatTicket: guide.sunatTicket,
       cancellation: guide.cancellationReason
         ? {
             reason: guide.cancellationReason,

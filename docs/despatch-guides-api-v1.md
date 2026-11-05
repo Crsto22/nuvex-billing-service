@@ -14,6 +14,7 @@ un correlativo entre `1` y `99999999`.
 
 ```text
 POST /v1/despatch-guides
+POST /v1/despatch-guides/{guideId}/submit
 GET  /v1/despatch-guides
 GET  /v1/despatch-guides/{guideId}
 POST /v1/despatch-guides/{guideId}/artifacts
@@ -23,6 +24,16 @@ GET  /v1/despatch-guides/{guideId}/artifacts
 GET  /v1/despatch-guides/{guideId}/artifacts/{XML|ZIP|CDR|PDF_A4}
 POST /v1/despatch-guides/{guideId}/cancel
 ```
+
+`POST /submit` crea un trabajo durable. En `BETA` genera y valida los artefactos
+sin enviarlos a SUNAT y finaliza como `VALIDATED_BETA`. En `PRODUCTION` exige
+usuario/clave SOL, `client_id`, `client_secret` y certificado activos; obtiene
+el token REST, envia el ZIP, consulta el ticket y procesa el CDR. Los endpoints
+pueden sobrescribirse para pruebas controladas mediante `SUNAT_GRE_TOKEN_URL`
+y `SUNAT_GRE_API_URL`.
+
+`relatedDocuments` admite multiples documentos del Catalogo 61. El campo
+singular `relatedDocument` se mantiene como entrada compatible.
 
 ## Webhooks
 

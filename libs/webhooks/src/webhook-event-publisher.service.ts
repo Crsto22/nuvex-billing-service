@@ -152,6 +152,8 @@ export class WebhookEventPublisherService {
           },
         },
         sunatCode: true,
+        sunatHash: true,
+        sunatTicket: true,
         sunatMessage: true,
         sunatObservations: true,
         submittedAt: true,
@@ -176,6 +178,8 @@ export class WebhookEventPublisherService {
           status: guide.status,
           series: guide.series,
           number: guide.number,
+          fullNumber: `${guide.series}-${String(guide.number).padStart(8, '0')}`,
+          sunatHash: guide.sunatHash,
           transfer: {
             startDate: guide.transferStartDate.toISOString().slice(0, 10),
             reasonCode: guide.transferReasonCode,
@@ -199,6 +203,7 @@ export class WebhookEventPublisherService {
           recipient: guide.recipient,
           sunat: {
             code: guide.sunatCode,
+            ticket: guide.sunatTicket,
             message: guide.sunatMessage,
             observations: guide.sunatObservations,
             submittedAt: guide.submittedAt?.toISOString() ?? null,

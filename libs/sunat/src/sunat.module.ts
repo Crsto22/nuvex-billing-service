@@ -7,6 +7,7 @@ import { SunatSubmissionService } from './sunat-submission.service';
 import { UblModule } from '../../ubl/src/ubl.module';
 import { SunatDailySummaryService } from './sunat-daily-summary.service';
 import { DespatchGuideCdrService } from './despatch-guide-cdr.service';
+import { DespatchGuideSunatRestService } from './despatch-guide-sunat-rest.service';
 
 @Module({
   imports: [StorageModule, WebhooksModule, UblModule],
@@ -16,11 +17,13 @@ import { DespatchGuideCdrService } from './despatch-guide-cdr.service';
     SunatSubmissionService,
     SunatDailySummaryService,
     DespatchGuideCdrService,
+    DespatchGuideSunatRestService,
   ],
   exports: [
     SunatSubmissionService,
     SunatDailySummaryService,
     DespatchGuideCdrService,
+    DespatchGuideSunatRestService,
   ],
 })
 export class SunatModule {}

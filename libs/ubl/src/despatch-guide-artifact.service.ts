@@ -37,6 +37,7 @@ export class DespatchGuideArtifactService {
         vehicles: true,
         drivers: true,
         items: true,
+        relatedDocuments: true,
         artifacts: true,
       },
     });

@@ -254,6 +254,13 @@ export class CreateDespatchGuideDto {
   relatedDocument?: RelatedDespatchDocumentDto | null;
 
   @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => RelatedDespatchDocumentDto)
+  relatedDocuments?: RelatedDespatchDocumentDto[];
+
+  @IsOptional()
   @IsObject()
   metadata?: Record<string, string | number | boolean | null>;
 }

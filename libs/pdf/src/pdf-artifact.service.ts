@@ -29,7 +29,7 @@ export class PdfArtifactService {
     private readonly brandingLogo: BrandingLogoResolverService,
   ) {}
 
-  async generate(documentId: string) {
+  async generate(documentId: string, options: { refresh?: boolean } = {}) {
     const document = await this.prisma.taxDocument.findUnique({
       where: { id: documentId },
       include: {
@@ -44,16 +44,19 @@ export class PdfArtifactService {
     const existing = new Map(
       document.artifacts.map((artifact) => [artifact.type, artifact]),
     );
-    if (PDF_FORMATS.every(({ type }) => existing.has(type))) {
+    if (
+      !options.refresh &&
+      PDF_FORMATS.every(({ type }) => existing.has(type))
+    ) {
       return PDF_FORMATS.map(({ type }) => existing.get(type)!);
     }
-    if (!['ACCEPTED', 'ACCEPTED_WITH_OBSERVATIONS'].includes(document.status)) {
+    if (['FAILED', 'VOIDED'].includes(document.status)) {
       throw new ConflictException(
-        'Los PDF solo se generan para comprobantes aceptados por SUNAT',
+        'El comprobante no admite una representacion impresa',
       );
     }
-    if (!document.sunatHash || !document.respondedAt) {
-      throw new ConflictException('La respuesta SUNAT esta incompleta');
+    if (!document.sunatHash) {
+      throw new ConflictException('El XML firmado esta incompleto');
     }
     const zip = document.artifacts.find((item) => item.type === 'ZIP');
     if (!zip) throw new ConflictException('El documento no tiene ZIP firmado');
@@ -64,7 +67,7 @@ export class PdfArtifactService {
     const results = [];
     for (const definition of PDF_FORMATS) {
       const persisted = existing.get(definition.type);
-      if (persisted) {
+      if (persisted && !options.refresh) {
         results.push(persisted);
         continue;
       }
@@ -90,7 +93,13 @@ export class PdfArtifactService {
             sizeBytes: body.length,
             sha256: createHash('sha256').update(body).digest('hex'),
           },
-          update: {},
+          update: {
+            fileName,
+            objectKey,
+            contentType: 'application/pdf',
+            sizeBytes: body.length,
+            sha256: createHash('sha256').update(body).digest('hex'),
+          },
         }),
       );
     }

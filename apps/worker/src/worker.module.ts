@@ -16,6 +16,9 @@ import { WebhookWorkerService } from './webhook-worker.service';
 import { SunatVoidJobRepository } from './sunat-void-job.repository';
 import { SunatVoidJobProcessorService } from './sunat-void-job-processor.service';
 import { SunatVoidWorkerService } from './sunat-void-worker.service';
+import { DespatchGuideJobRepository } from './despatch-guide-job.repository';
+import { DespatchGuideJobProcessorService } from './despatch-guide-job-processor.service';
+import { DespatchGuideWorkerService } from './despatch-guide-worker.service';
 
 @Module({
   imports: [
@@ -38,6 +41,9 @@ import { SunatVoidWorkerService } from './sunat-void-worker.service';
     SunatVoidJobRepository,
     SunatVoidJobProcessorService,
     SunatVoidWorkerService,
+    DespatchGuideJobRepository,
+    DespatchGuideJobProcessorService,
+    DespatchGuideWorkerService,
   ],
 })
 export class WorkerModule {}

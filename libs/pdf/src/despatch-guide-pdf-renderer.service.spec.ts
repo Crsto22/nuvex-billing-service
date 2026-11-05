@@ -50,6 +50,7 @@ function guide(mode: 'PRIVATE' | 'PUBLIC') {
   const id = '00000000-0000-0000-0000-000000000001';
   return {
     id,
+    environment: 'BETA',
     series: 'T001',
     number: 42,
     issueDate: new Date('2026-11-02T00:00:00.000Z'),

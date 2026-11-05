@@ -9,6 +9,8 @@ const INK = '#111111';
 const BORDER = '#8A8A8A';
 const SOFT = '#E6E6E6';
 const MUTED = '#555555';
+const DEMO_WATERMARK = 'DOCUMENTO DE PRUEBA\nSIN VALOR TRIBUTARIO';
+const REJECTED_WATERMARK = 'DOCUMENTO RECHAZADO\nSIN VALOR TRIBUTARIO';
 
 @Injectable()
 export class PdfRendererService {
@@ -40,6 +42,7 @@ export class PdfRendererService {
     const issuer = document.issuerSnapshot as unknown as PdfIssuer;
     const customer = document.customerSnapshot as unknown as PdfCustomer;
 
+    this.demoWatermark(pdf, document);
     this.a4Header(pdf, document, issuer, logo);
     this.a4Customer(pdf, document, customer);
 
@@ -53,6 +56,7 @@ export class PdfRendererService {
       );
       if (y + rowHeight > 540) {
         pdf.addPage();
+        this.demoWatermark(pdf, document);
         y = this.a4TableHeader(pdf, 45);
       }
       pdf.fillColor(INK).font('Helvetica').fontSize(7.5);
@@ -304,12 +308,13 @@ export class PdfRendererService {
   }
 
   private a4Footer(pdf: PDFKit.PDFDocument, document: PdfTaxDocument) {
+    const fiscalStatus = this.status(document);
     pdf
       .fillColor(MUTED)
       .font('Helvetica')
       .fontSize(6.8)
       .text(
-        `Representación impresa de la ${this.documentTitle(document)}. Consulte la validez del comprobante en el portal de SUNAT. Estado: ${this.status(document)}. Código: ${document.sunatCode ?? '-'}.`,
+        `Representación impresa de la ${this.documentTitle(document)}. Consulte la validez del comprobante en el portal de SUNAT.${fiscalStatus ? ` Estado: ${fiscalStatus}. Código: ${document.sunatCode ?? '-'}.` : ''}`,
         60,
         782,
         { width: 475, align: 'center', lineBreak: false },
@@ -338,6 +343,7 @@ export class PdfRendererService {
     const width = 200.77;
     let y = 22;
 
+    this.demoWatermark(pdf, document);
     if (logo) {
       this.logo(pdf, logo, 38, y, 150, 55);
       y += 68;
@@ -352,12 +358,12 @@ export class PdfRendererService {
         });
       y = pdf.y + 17;
     }
-    pdf.font('Courier-Bold').fontSize(8).text(issuer.legalName, 13, y, {
+    pdf.font('Helvetica-Bold').fontSize(8).text(issuer.legalName, 13, y, {
       width,
       align: 'center',
     });
     pdf
-      .font('Courier')
+      .font('Helvetica')
       .fontSize(7.5)
       .text(issuer.address, 13, pdf.y + 3, { width, align: 'center' });
     if (issuer.tradeName) {
@@ -371,7 +377,7 @@ export class PdfRendererService {
       align: 'center',
     });
     pdf
-      .font('Courier-Bold')
+      .font('Helvetica-Bold')
       .fontSize(9)
       .text(this.documentTitle(document), 13, pdf.y + 4, {
         width,
@@ -386,7 +392,7 @@ export class PdfRendererService {
     y = pdf.y + 20;
 
     y = this.ticketRule(pdf, y);
-    pdf.font('Courier-Bold').fontSize(8);
+    pdf.font('Helvetica-Bold').fontSize(8);
     y = this.ticketField(pdf, 'Fecha', this.shortDate(document), y, width);
     y = this.ticketField(pdf, 'Cliente', customer.name, y, width);
     y = this.ticketField(
@@ -418,7 +424,7 @@ export class PdfRendererService {
     }
     y = this.ticketRule(pdf, y + 3);
 
-    pdf.font('Courier-Bold').fontSize(7.5);
+    pdf.font('Helvetica-Bold').fontSize(7.5);
     pdf.text('CANT.', 13, y, { width: 35 });
     pdf.text('DESCRIPCIÓN', 48, y, { width: 94 });
     pdf.text('P.UNIT', 142, y, { width: 34, align: 'right' });
@@ -430,7 +436,7 @@ export class PdfRendererService {
         width: 94,
       });
       const rowHeight = Math.max(13, descriptionHeight + 4);
-      pdf.font('Courier').fontSize(7.3);
+      pdf.font('Helvetica').fontSize(7.3);
       pdf.text(line.quantity.toFixed(2), 13, y, { width: 35 });
       pdf.text(line.description, 48, y, { width: 94 });
       pdf.text(line.unitValue.toFixed(2), 142, y, {
@@ -445,9 +451,9 @@ export class PdfRendererService {
     }
     y = this.ticketRule(pdf, y + 2);
 
-    pdf.font('Courier').fontSize(8);
+    pdf.font('Helvetica').fontSize(8);
     for (const [label, amount, bold] of this.totalRows(document)) {
-      pdf.font(bold ? 'Courier-Bold' : 'Courier');
+      pdf.font(bold ? 'Helvetica-Bold' : 'Helvetica');
       pdf.text(label, 13, y, { width: 125 });
       pdf.text(this.currencySymbol(document.currency), 138, y, {
         width: 22,
@@ -459,11 +465,11 @@ export class PdfRendererService {
 
     y += 15;
     pdf
-      .font('Courier-Bold')
+      .font('Helvetica-Bold')
       .fontSize(7.6)
       .text('IMPORTE EN LETRAS', 13, y, { width });
     pdf
-      .font('Courier')
+      .font('Helvetica')
       .text(
         amountInWords(document.totalAmount.toFixed(2), document.currency),
         13,
@@ -475,14 +481,14 @@ export class PdfRendererService {
     pdf.image(qr, 64, y, { width: 99, height: 99 });
     y += 111;
     pdf
-      .font('Courier-Bold')
+      .font('Helvetica-Bold')
       .fontSize(8)
       .text('¡Gracias por su preferencia!', 13, y, {
         width,
         align: 'center',
       });
     pdf
-      .font('Courier')
+      .font('Helvetica')
       .fontSize(7)
       .text(
         `Representación impresa de la ${this.documentTitle(document)}. Consulte la validez en el portal de SUNAT.`,
@@ -490,12 +496,15 @@ export class PdfRendererService {
         pdf.y + 14,
         { width, align: 'center' },
       );
-    pdf.text(
-      `Estado: ${this.status(document)} - Código: ${document.sunatCode ?? '-'}`,
-      13,
-      pdf.y + 6,
-      { width, align: 'center' },
-    );
+    const fiscalStatus = this.status(document);
+    if (fiscalStatus) {
+      pdf.text(
+        `Estado: ${fiscalStatus} - Código: ${document.sunatCode ?? '-'}`,
+        13,
+        pdf.y + 6,
+        { width, align: 'center' },
+      );
+    }
     pdf.end();
     return result;
   }
@@ -507,10 +516,10 @@ export class PdfRendererService {
     y: number,
     width: number,
   ) {
-    pdf.font('Courier-Bold');
+    pdf.font('Helvetica-Bold');
     const labelHeight = pdf.heightOfString(`${label}:`, { width: 55 });
     pdf.text(`${label}:`, 13, y, { width: 55 });
-    pdf.font('Courier');
+    pdf.font('Helvetica');
     const valueHeight = pdf.heightOfString(value, { width: width - 55 });
     pdf.text(value, 68, y, { width: width - 55 });
     return y + Math.max(12, labelHeight, valueHeight) + 3;
@@ -524,6 +533,35 @@ export class PdfRendererService {
       .lineTo(213.77, y)
       .stroke();
     return y + 7;
+  }
+
+  private demoWatermark(pdf: PDFKit.PDFDocument, document: PdfTaxDocument) {
+    const text =
+      document.status === 'REJECTED'
+        ? REJECTED_WATERMARK
+        : document.environment === 'BETA'
+          ? DEMO_WATERMARK
+          : null;
+    if (!text) return;
+
+    const pageWidth = pdf.page.width;
+    const pageHeight = pdf.page.height;
+    const fontSize = pageWidth < 300 ? 20 : 42;
+    const textWidth = pageWidth < 300 ? pageWidth * 0.78 : pageWidth * 0.72;
+
+    pdf.save();
+    pdf
+      .fillColor('#707070')
+      .opacity(0.1)
+      .font('Helvetica-Bold')
+      .fontSize(fontSize)
+      .rotate(-35, { origin: [pageWidth / 2, pageHeight / 2] })
+      .text(text, (pageWidth - textWidth) / 2, pageHeight / 2 - fontSize, {
+        width: textWidth,
+        align: 'center',
+        lineGap: 5,
+      });
+    pdf.restore();
   }
 
   private totalRows(
@@ -546,9 +584,11 @@ export class PdfRendererService {
   }
 
   private status(document: PdfTaxDocument) {
-    return document.status === 'ACCEPTED_WITH_OBSERVATIONS'
-      ? 'ACEPTADO CON OBSERVACIONES'
-      : 'ACEPTADO';
+    if (document.status === 'ACCEPTED_WITH_OBSERVATIONS')
+      return 'ACEPTADO CON OBSERVACIONES';
+    if (document.status === 'ACCEPTED') return 'ACEPTADO';
+    if (document.status === 'REJECTED') return 'RECHAZADO';
+    return null;
   }
 
   private shortDate(document: PdfTaxDocument) {

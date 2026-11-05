@@ -64,17 +64,23 @@ describe('EmissionJobProcessorService', () => {
 
     expect(artifacts.generate).toHaveBeenCalledWith('document-1');
     expect(sunat.submit).toHaveBeenCalledWith('document-1');
-    expect(pdf.generate).toHaveBeenCalledWith('document-1');
+    expect(pdf.generate).toHaveBeenNthCalledWith(1, 'document-1');
+    expect(pdf.generate).toHaveBeenNthCalledWith(2, 'document-1', {
+      refresh: true,
+    });
     expect(repository.complete).toHaveBeenCalledWith(job, 'worker-1');
     expect(repository.fail).not.toHaveBeenCalled();
   });
 
-  it('no genera representación impresa para un comprobante rechazado', async () => {
+  it('conserva y actualiza la representación impresa de un comprobante rechazado', async () => {
     const { service, repository, pdf } = setup(undefined, 'REJECTED');
 
     await service.process(job, 'worker-1');
 
-    expect(pdf.generate).not.toHaveBeenCalled();
+    expect(pdf.generate).toHaveBeenNthCalledWith(1, 'document-1');
+    expect(pdf.generate).toHaveBeenNthCalledWith(2, 'document-1', {
+      refresh: true,
+    });
     expect(repository.complete).toHaveBeenCalledWith(job, 'worker-1');
   });
 

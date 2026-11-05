@@ -40,12 +40,14 @@ export class EmissionJobProcessorService {
         );
       }
       await this.artifacts.generate(job.documentId);
+      await this.pdf.generate(job.documentId);
       const sunat = await this.sunat.submit(job.documentId);
       if (
         sunat.status === 'ACCEPTED' ||
-        sunat.status === 'ACCEPTED_WITH_OBSERVATIONS'
+        sunat.status === 'ACCEPTED_WITH_OBSERVATIONS' ||
+        sunat.status === 'REJECTED'
       ) {
-        await this.pdf.generate(job.documentId);
+        await this.pdf.generate(job.documentId, { refresh: true });
       }
       await this.repository.complete(job, workerId);
       this.logger.log(

@@ -40,6 +40,7 @@ enum DocumentType {
 enum DespatchGuideStatus {
   REGISTERED
   PROCESSING
+  VALIDATED_BETA
   ACCEPTED
   ACCEPTED_WITH_OBSERVATIONS
   REJECTED
@@ -408,6 +409,7 @@ model DespatchGuide {
   sunatMessage              String?                 @map("sunat_message") @db.VarChar(1000)
   sunatObservations         String[]                @default([]) @map("sunat_observations")
   sunatHash                 String?                 @map("sunat_hash") @db.VarChar(128)
+  sunatTicket               String?                 @map("sunat_ticket") @db.VarChar(120)
   cancellationReason        String?                 @map("cancellation_reason") @db.VarChar(250)
   cancellationRequestedAt   DateTime?               @map("cancellation_requested_at") @db.Timestamptz(6)
   cancelledAt               DateTime?               @map("cancelled_at") @db.Timestamptz(6)
@@ -423,15 +425,49 @@ model DespatchGuide {
   vehicles                  DespatchGuideVehicle[]
   drivers                   DespatchGuideDriver[]
   items                     DespatchGuideItem[]
+  relatedDocuments          DespatchGuideRelatedDocument[]
   artifacts                 DespatchGuideArtifact[]
   webhookEvents             WebhookEvent[]
   voidRequest               SunatVoidRequest?
+  emissionJob               DespatchGuideEmissionJob?
 
   @@unique([applicationId, externalId])
   @@unique([tenantId, environment, series, number])
   @@index([applicationId, createdAt])
   @@index([tenantId, environment, status, createdAt])
   @@map("despatch_guide")
+}
+
+model DespatchGuideRelatedDocument {
+  id           String        @id @default(uuid()) @db.Uuid
+  guideId      String        @map("guide_id") @db.Uuid
+  documentType String        @map("document_type") @db.VarChar(2)
+  number       String        @db.VarChar(100)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  guide        DespatchGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@unique([guideId, documentType, number])
+  @@index([guideId, createdAt])
+  @@map("despatch_guide_related_document")
+}
+
+model DespatchGuideEmissionJob {
+  id               String            @id @default(uuid()) @db.Uuid
+  guideId          String            @unique @map("guide_id") @db.Uuid
+  status           EmissionJobStatus @default(PENDING)
+  attempts         Int               @default(0)
+  maxAttempts      Int               @default(20) @map("max_attempts")
+  nextAttemptAt    DateTime          @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  lockedAt         DateTime?         @map("locked_at") @db.Timestamptz(6)
+  lockedBy         String?           @map("locked_by") @db.VarChar(100)
+  lastErrorCode    String?           @map("last_error_code") @db.VarChar(40)
+  lastErrorMessage String?           @map("last_error_message") @db.VarChar(1000)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  processedAt      DateTime?         @map("processed_at") @db.Timestamptz(6)
+  guide            DespatchGuide     @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@map("despatch_guide_emission_job")
 }
 
 model DespatchGuideRecipient {

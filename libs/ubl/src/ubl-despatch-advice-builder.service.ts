@@ -17,6 +17,7 @@ type DespatchAdviceGuide = Prisma.DespatchGuideGetPayload<{
     vehicles: true;
     drivers: true;
     items: true;
+    relatedDocuments: true;
   };
 }>;
 
@@ -108,16 +109,27 @@ export class UblDespatchAdviceBuilderService {
   }
 
   private appendRelatedDocument(root: XmlNode, guide: DespatchAdviceGuide) {
-    if (!guide.relatedDocumentType || !guide.relatedDocumentNumber) return;
-    const reference = root.ele('cac:AdditionalDocumentReference');
-    reference.ele('cbc:ID').txt(guide.relatedDocumentNumber);
-    reference
-      .ele('cbc:DocumentTypeCode', {
-        listAgencyName: 'PE:SUNAT',
-        listName: 'Documento relacionado al transporte',
-        listURI: 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo61',
-      })
-      .txt(guide.relatedDocumentType);
+    const documents = guide.relatedDocuments?.length
+      ? guide.relatedDocuments
+      : guide.relatedDocumentType && guide.relatedDocumentNumber
+        ? [
+            {
+              documentType: guide.relatedDocumentType,
+              number: guide.relatedDocumentNumber,
+            },
+          ]
+        : [];
+    for (const document of documents) {
+      const reference = root.ele('cac:AdditionalDocumentReference');
+      reference.ele('cbc:ID').txt(document.number);
+      reference
+        .ele('cbc:DocumentTypeCode', {
+          listAgencyName: 'PE:SUNAT',
+          listName: 'Documento relacionado al transporte',
+          listURI: 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo61',
+        })
+        .txt(document.documentType);
+    }
   }
 
   private appendSignatureDeclaration(root: XmlNode, issuer: IssuerSnapshot) {

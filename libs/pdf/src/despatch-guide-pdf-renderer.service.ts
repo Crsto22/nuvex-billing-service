@@ -12,6 +12,7 @@ const MUTED = '#555555';
 const BORDER = '#8A8A8A';
 const SOFT = '#E6E6E6';
 const TABLE_HEADER = '#F2F2F2';
+const DEMO_WATERMARK = 'DOCUMENTO DE PRUEBA\nSIN VALOR TRIBUTARIO';
 
 @Injectable()
 export class DespatchGuidePdfRendererService {
@@ -31,6 +32,7 @@ export class DespatchGuidePdfRendererService {
     const result = this.collect(pdf);
     const issuer = guide.issuerSnapshot as unknown as PdfDespatchIssuer;
 
+    this.demoWatermark(pdf, guide);
     this.header(pdf, guide, issuer, logo);
     this.transferDetails(pdf, guide);
     let y = this.tableHeader(pdf, 341);
@@ -42,6 +44,7 @@ export class DespatchGuidePdfRendererService {
       );
       if (y + height > 690) {
         pdf.addPage();
+        this.demoWatermark(pdf, guide);
         this.continuationHeader(pdf, guide);
         y = this.tableHeader(pdf, 78);
       }
@@ -74,6 +77,7 @@ export class DespatchGuidePdfRendererService {
 
     if (y + 158 > 748) {
       pdf.addPage();
+      this.demoWatermark(pdf, guide);
       this.continuationHeader(pdf, guide);
       y = 86;
     }
@@ -337,6 +341,28 @@ export class DespatchGuidePdfRendererService {
         42,
         { width: 513, align: 'center' },
       );
+  }
+
+  private demoWatermark(pdf: PDFKit.PDFDocument, guide: PdfDespatchGuide) {
+    if (guide.environment !== 'BETA') return;
+
+    const pageWidth = pdf.page.width;
+    const pageHeight = pdf.page.height;
+    const textWidth = pageWidth * 0.72;
+
+    pdf.save();
+    pdf
+      .fillColor('#707070')
+      .opacity(0.1)
+      .font('Helvetica-Bold')
+      .fontSize(42)
+      .rotate(-35, { origin: [pageWidth / 2, pageHeight / 2] })
+      .text(DEMO_WATERMARK, (pageWidth - textWidth) / 2, pageHeight / 2 - 42, {
+        width: textWidth,
+        align: 'center',
+        lineGap: 5,
+      });
+    pdf.restore();
   }
 
   private pageFooters(pdf: PDFKit.PDFDocument) {

@@ -71,6 +71,22 @@ export class DespatchGuidesController {
     return this.guides.get(guideId, principal);
   }
 
+  @Post(':guideId/submit')
+  @RequireScopes('documents:write')
+  submit(
+    @Param('guideId', ParseUUIDPipe) guideId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @CurrentPrincipal() principal: ApplicationPrincipal,
+    @Req() request: RequestWithId,
+  ) {
+    return this.guides.submit(
+      guideId,
+      idempotencyKey ?? '',
+      principal,
+      request,
+    );
+  }
+
   @Post(':guideId/artifacts')
   @RequireScopes('documents:write')
   generateArtifacts(
